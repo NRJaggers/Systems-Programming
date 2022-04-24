@@ -13,6 +13,7 @@ DESCRIPTION - This program reads in input from the keyboard
 *******************************************************/
 
 #include <iostream>
+#include <stdio.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/mman.h>
@@ -26,12 +27,11 @@ using namespace std;
 #define SIZE 100
 
 //global variables
-int fileDiscriptor[2];
-int continueFlag = 1;
+int fileDescriptor[2];
+    
 
 //function prototypes
 void signalHandler(int i);
-void quitHandler(int i);
 void modifyText(char[], int);
 
 int main()
@@ -44,65 +44,78 @@ int main()
          << "--------------------------------------\n";
 
 //SET UP FOR COMMUNICATION BETWEEN PARENT AND CHILD
+    //save standard input file descriptor
+    int restore_stdin = dup(STDIN_FILENO);
+    
     //set up signals
     signal(SIGUSR1, signalHandler); // to handle change from standard input to child input
 
     //set up pipes
-    pipe(fileDiscriptor);
+    pipe(fileDescriptor);
 
     //set up shared variables
-    time_t *start = (time_t *) mmap(NULL, sizeof(time_t), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
-    time(start);
+    timeval *start = (timeval *) mmap(NULL, sizeof(timeval), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+    timeval *end = (timeval *) mmap(NULL, sizeof(timeval), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+    int *continueFlag = (int *) mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+    int parentPID = getpid();
+    char inactive[] = "\n---Inactivity Detected---\n";
+
+    //initialize shared vars before forking
+    gettimeofday(start,NULL);
+    *continueFlag = 1;
 
 //FORK --> PARENT HANDLES USER INPUT --> CHILD HANDLES INACTIVITY
     //fork; close any unused pipes for each process
     if (fork() == 0)
     {
-        time_t *end;
         //child process
-        while(continueFlag)
+        //define child variables
+        //timeval *end;
+
+
+        //close unused pipes
+        close(fileDescriptor[0]);
+
+        while(*continueFlag)
         {
-            //check if 10 seconds have passed (since last input?)
-            //can try through shared memory of time_t
-            //can try through vars on in child and if statements to choose when reassigned
-            //can try sleep
-            time(end);
-            if (difftime(*end, *start)>=10)
-            //check if parent has been active through shared flag
-            if(active)
+            //check if 10 seconds have passed since last input
+            gettimeofday(end,NULL);
+            if ((end->tv_sec-start->tv_sec) >= 10)
             {
-                //if active is true, reset flag
-                //reset time?//maybe reset time in outer if statement
+                //if time is greater than 10 seconds,
+                //take over standard input and write
+                //inactivity message to pipe
+                kill(parentPID,SIGUSR1);
+                write(fileDescriptor[1],inactive ,sizeof(inactive));
             }
-            else
-            {
-                //if active is false, take over standard input
-                //and write inactivity message to pipe
 
-                //send signal to parent
-
-
-            }
         }
+
+        //close pipe
+        close(fileDescriptor[1]);
 
         return 0;
     }
     else
     {
         //parent process
-        //save standard input file descriptor
-        int restore_stdin = dup(STDIN_FILENO);
+        //close unused pipes
+        close(fileDescriptor[1]);
 
         //set up parent variables
         char text[SIZE+3]; //max message size of 100 with extra space for ! and null terminator
         int bytesRead = 0;
         string test;
+        int timeDiff;
 
         while(true)
         {
-
             //get input from keyboard
             bytesRead = read(STDIN_FILENO, text, SIZE);
+
+            //update time for most recent input and indicate active parent
+            gettimeofday(start,NULL);
+            //timeDiff = end->tv_sec-start->tv_sec;
 
             //test input to see if it is quit command
             test = text;
@@ -111,40 +124,41 @@ int main()
                 //if true, break out of while loop
                 break;
             }
-
-            //modify text and prepare for printing
-            modifyText(text, bytesRead);
-
-            //indicate parent is active either through timestamp or flag
+            else if((test.find(inactive) ) == -1)
+            {
+                //modify text and prepare for printing
+                modifyText(text, bytesRead);
+            }
 
             //print out what is in text buffer
             printf("%s\n",text);
 
-            //restore parent (? is this when signal happens?)
-
+            //restore parent
+            dup2(restore_stdin,STDIN_FILENO);
         }
+
+        //toggle flag and allow kid to return and exit
+        *continueFlag = 0;
+
+        //wait for child to finish
+        wait(0);
+
     }
 
 //QUIT CONDITION REACHED, CLEAN UP AND EXIT
     //free allocated memory
+    munmap(start,sizeof(timeval));
+    munmap(end,sizeof(timeval));
+    munmap(continueFlag,sizeof(int));
 
-    //kill child (send signal to break from loop)
-
-    //wait for child to finish
-    wait(0);
     //close pipes
-
+    close(fileDescriptor[0]);
     return 0;
 }
 
 void signalHandler(int i)
 {
-    dup2(fileDiscriptor[0],STDIN_FILENO);
-}
-
-void quitHandler(int i)
-{
-    continueFlag = 0;
+    dup2(fileDescriptor[0],STDIN_FILENO);
 }
 
 void modifyText(char message[], int messageSize)
