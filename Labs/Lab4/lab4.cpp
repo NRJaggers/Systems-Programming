@@ -36,7 +36,7 @@ void modifyText(char[], int);
 
 int main()
 {
-    cout << "Welcome!\n"
+    cout << "\nWelcome!\n"
          << "Messages in the program longer than\n"
          << "100 characters will be cut off.\n"
          << "If \"quit\" is anywhere in the message\n"
@@ -124,15 +124,16 @@ int main()
                 //if true, break out of while loop
                 break;
             }
-            else if((test.find(inactive) ) == -1)
-            {
+            // else if((test.find(inactive) ) == -1)
+            // {
                 //modify text and prepare for printing
                 modifyText(text, bytesRead);
-            }
+            // }
 
             //print out what is in text buffer
             printf("%s\n",text);
 
+            
             //restore parent
             dup2(restore_stdin,STDIN_FILENO);
         }
