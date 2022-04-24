@@ -31,17 +31,16 @@ int fileDescriptor[2];
     
 
 //function prototypes
+void welcome();
 void signalHandler(int i);
 void modifyText(char[], int);
 
 int main()
 {
-    cout << "\nWelcome!\n"
-         << "Messages in the program longer than\n"
-         << "100 characters will be cut off.\n"
-         << "If \"quit\" is anywhere in the message\n"
-         << "text, the program will quit\n"
-         << "--------------------------------------\n";
+
+//WELCOME MESSAGE
+    //important message about how the program operates
+    welcome();
 
 //SET UP FOR COMMUNICATION BETWEEN PARENT AND CHILD
     //save standard input file descriptor
@@ -58,7 +57,7 @@ int main()
     timeval *end = (timeval *) mmap(NULL, sizeof(timeval), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
     int *continueFlag = (int *) mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
     int parentPID = getpid();
-    char inactive[] = "\n---Inactivity Detected---\n";
+    char inactive[] = "\n---Inactivity Detected---\n\0";
 
     //initialize shared vars before forking
     gettimeofday(start,NULL);
@@ -70,8 +69,6 @@ int main()
     {
         //child process
         //define child variables
-        //timeval *end;
-
 
         //close unused pipes
         close(fileDescriptor[0]);
@@ -86,9 +83,8 @@ int main()
                 //take over standard input and write
                 //inactivity message to pipe
                 kill(parentPID,SIGUSR1);
-                write(fileDescriptor[1],inactive ,sizeof(inactive));
+                write(fileDescriptor[1],inactive ,SIZE);
             }
-
         }
 
         //close pipe
@@ -115,7 +111,6 @@ int main()
 
             //update time for most recent input and indicate active parent
             gettimeofday(start,NULL);
-            //timeDiff = end->tv_sec-start->tv_sec;
 
             //test input to see if it is quit command
             test = text;
@@ -124,11 +119,11 @@ int main()
                 //if true, break out of while loop
                 break;
             }
-            // else if((test.find(inactive) ) == -1)
-            // {
+            else if((test.find(inactive) ) == -1)
+            {
                 //modify text and prepare for printing
                 modifyText(text, bytesRead);
-            // }
+            }
 
             //print out what is in text buffer
             printf("%s\n",text);
@@ -154,7 +149,18 @@ int main()
 
     //close pipes
     close(fileDescriptor[0]);
+    
     return 0;
+}
+
+void welcome()
+{
+    cout << "\nWelcome!\n"
+         << "Messages in the program longer than\n"
+         << "100 characters will be cut off.\n"
+         << "If \"quit\" is anywhere in the message\n"
+         << "text, the program will quit\n"
+         << "--------------------------------------\n";
 }
 
 void signalHandler(int i)
