@@ -131,7 +131,8 @@ void DoubleLinkedList ::deleteNode()
                 head = i->next;
 
                 // NULL->C
-                i->next->prev = NULL;
+                if (i->next != NULL)
+                    i->next->prev = NULL;
             }
             else if (i == tail)
             {
@@ -162,8 +163,15 @@ ListElement *DoubleLinkedList ::findTail()
 {
     // go through nodes and find end of list
     ListElement *i;
-    for (i = this->head; i->next != NULL; i = i->next)
-        ;
+    if(this->head != NULL)
+    {
+            for (i = this->head; i->next != NULL; i = i->next);
+    }
+    else
+    {
+        i = NULL;
+    }
+
 
     return i;
 }
