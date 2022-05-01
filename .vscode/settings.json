@@ -4,6 +4,10 @@
         "cstdio": "cpp",
         "*.tcc": "cpp",
         "system_error": "cpp",
-        "ostream": "cpp"
+        "ostream": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "string_view": "cpp",
+        "iostream": "cpp"
     }
 }
