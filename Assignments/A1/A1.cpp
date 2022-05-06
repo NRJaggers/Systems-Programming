@@ -84,6 +84,8 @@ void analyze()
      */
 
     printf("\n--------------------------------------------------------------\n"); 
+
+    //print "no heap" if heap is empty
     if(!startofheap) 
     { 
         printf("no heap\n"); 
@@ -91,6 +93,8 @@ void analyze()
         return; 
     } 
 
+    //if not empty, store start of heap in variable and step through
+    //memory chuncks
     structinfo* ch = (structinfo*)startofheap; 
 
     for (int no=0; ch; ch = (structinfo*)ch->next,no++) 
@@ -103,27 +107,38 @@ void analyze()
         printf("      \n"); 
     } 
 
+    //show where program break is
     printf("program break on address: %p\n\n",sbrk(0)); 
 } 
-
+//***what happens if you pass in zero? What should happen? negative? What happend and what should?
 BYTE* mymalloc(int demand)
 {
     /**
      * allocate space in memory for desired size and return start address for chunck in memory 
      */
 
+    //declare and initialize variables to help create new chunck in memory
     int demand_bytes = demand + sizeof(structinfo);
     int page_required = demand_bytes / PAGESIZE + 1;
     int real_demand = page_required * PAGESIZE;
 
+    //different cases for status of heap when adding/allocating memory for data   
     if (startofheap == NULL)
     {
+        //move program break and initialize chunck with start of new memory info block
         structinfo *chunk = (structinfo*) sbrk(sizeof(structinfo));
+        
+        //fill in meta data about memory block
         chunk->size = real_demand;
         chunk->status = 1;
+
+        //define as start of heap
         startofheap = chunk;
+
+        //move program break for memory data block
         sbrk(real_demand - sizeof(structinfo));
         
+        //return address of memory data block
         return (BYTE*) chunk + sizeof(structinfo);
     }
 
@@ -141,7 +156,7 @@ void myfree(BYTE *address)
     BYTE *target_address = address - sizeof(structinfo);
     structinfo *chunk = (structinfo*) target_address;
     startofheap = NULL;
-    sbrk(-chunk->size); // Not always required, only when we need to move the program break back!
+    sbrk(-(chunk->size)); // Not always required, only when we need to move the program break back!
 }
 
 void testCase1()
