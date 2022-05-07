@@ -30,15 +30,17 @@ using namespace std;
 typedef unsigned char BYTE;
 
 //global variables
-void *startofheap = NULL;
+void *retAdd = NULL;        //var to hold return address for program break
+void *startofheap = NULL;   //var to hold start address of heap
 
-//struct definition for memory chunck
-typedef struct structinfo
+//struct definition for memory block info
+typedef struct memoryBlockInfo
 {
-    int size;
-    int status;
-    BYTE *next, *prev;
-}structinfo;
+    int size;           //size of memory block
+    int status;         //0 for free, 1 for occupied
+    blockInfo *next, *prev;  //holds addresses to adjacent blocks of memory (starting at info address not data)
+
+}blockInfo;
 
 //function prototypes
 void welcome();
@@ -94,16 +96,16 @@ void analyze()
     } 
 
     //if not empty, store start of heap in variable and step through
-    //memory chuncks
-    structinfo* ch = (structinfo*)startofheap; 
+    //memory chunks
+    blockInfo* chunk = (blockInfo*)startofheap; 
 
-    for (int no=0; ch; ch = (structinfo*)ch->next,no++) 
+    for (int no=0; chunk; chunk = chunk->next,no++) 
     { 
-        printf("%d | current addr: %p |", no, ch); 
-        printf("size: %d | ", ch->size); 
-        printf("info: %d | ", ch->status); 
-        printf("next: %p | ", ch->next); 
-        printf("prev: %p", ch->prev); 
+        printf("%d | current addr: %p |", no, chunk); 
+        printf("size: %d | ", chunk->size); 
+        printf("info: %d | ", chunk->status); 
+        printf("next: %p | ", chunk->next); 
+        printf("prev: %p", chunk->prev); 
         printf("      \n"); 
     } 
 
@@ -111,52 +113,143 @@ void analyze()
     printf("program break on address: %p\n\n",sbrk(0)); 
 } 
 //***what happens if you pass in zero? What should happen? negative? What happend and what should?
+//maybe return null on zero and change int parameter to unsigned int to handle negatives? - test after getting some stuff going
 BYTE* mymalloc(int demand)
 {
     /**
-     * allocate space in memory for desired size and return start address for chunck in memory 
+     * allocate space in memory for desired size and return start address for chunk in memory 
      */
 
-    //declare and initialize variables to help create new chunck in memory
-    int demand_bytes = demand + sizeof(structinfo);
+    //declare and initialize variables to help create new chunk in memory
+    int demand_bytes = demand + sizeof(blockInfo);
     int page_required = demand_bytes / PAGESIZE + 1;
     int real_demand = page_required * PAGESIZE;
 
     //different cases for status of heap when adding/allocating memory for data   
     if (startofheap == NULL)
     {
-        //move program break and initialize chunck with start of new memory info block
-        structinfo *chunk = (structinfo*) sbrk(sizeof(structinfo));
+        //before allocating anything, save return address for program break
+        retAdd = sbrk(0);
+
+        //move program break and initialize chunk with start of new memory info
+        blockInfo *block = (blockInfo*) sbrk(sizeof(blockInfo));
         
         //fill in meta data about memory block
-        chunk->size = real_demand;
-        chunk->status = 1;
+        block->size = real_demand;
+        block->status = 1;
+        block->prev = NULL;
+        block->next = NULL;
 
         //define as start of heap
-        startofheap = chunk;
+        startofheap = block;
 
-        //move program break for memory data block
-        sbrk(real_demand - sizeof(structinfo));
+        //move program break for data portion of block
+        sbrk(real_demand - sizeof(blockInfo));
         
-        //return address of memory data block
-        return (BYTE*) chunk + sizeof(structinfo);
+        //return address for start of data in memory block
+        return (BYTE*) block + sizeof(blockInfo);
+    }
+
+    //if startofheap has an address, go through memory chunks and find the first best fit
+    blockInfo *current = (blockInfo*) startofheap;
+    blockInfo *bestfit = NULL;
+    blockInfo *last = NULL;
+
+    while(current != NULL) {
+        //while steping though, keep track of last memory block
+        last = current;
+
+        //check if current chunk is free and is greater or equal to memory demand
+        if(current->status == 0 && current->size >= real_demand) {
+            
+            //check if best fit is null or if best fit size is greater than current size
+            if(bestfit == NULL) 
+            {
+                bestfit = current;
+            }
+            else if(bestfit->size > current->size)
+            {
+                bestfit = current;
+            }
+        }
+        //step to next memory block
+        current = current->next;
+    }
+
+    //if best fit is null, that means we must add a new memory chunk
+    //if not we need to check the best fit block and our demand to determine if we split the block
+    if(bestfit == NULL) {
+        //create a new chunk
+        //move program break and initialize chunk with start of new memory info
+        blockInfo *block = (blockInfo*) sbrk(sizeof(blockInfo));
+        
+        //fill in meta data about memory block
+        block->size = real_demand;
+        block->status = 1;
+        block->prev = last;
+        block->next = NULL;
+
+        //finish linking memory blocks
+        last->next = block;
+
+        //move program break for data portion of block
+        sbrk(real_demand - sizeof(blockInfo));
+        
+        //return address for start of data in memory block
+        return (BYTE*) block + sizeof(blockInfo);
+    }
+    else {
+        //does our best fit need to be split?
+        //does it have more pages than our real demand requires?
+
+        //check for split
+        if(bestfit->size > real_demand)
+        {
+            //start at best fit address and move to address after demand is met
+            blockInfo *remaining = (blockInfo*)((BYTE)bestfit + real_demand);
+
+            //update remaining info
+            remaining->size = bestfit->size - real_demand;
+            remaining->status = 0; 
+
+            //update best fit info
+            bestfit->size = real_demand;
+            bestfit->status = 1;
+
+            //relink memory
+            remaining->next = bestfit->next;
+            remaining->prev = bestfit;
+            bestfit->next = remaining;
+
+        }
+
+        //return address for requested memory
+        return (BYTE*) bestfit + sizeof(blockInfo);
+
     }
 
     return NULL;
 }
-
+//make sure to parallel with myMalloc
+//if you add a case for null there, do it here too!
 void myfree(BYTE *address)
 {
     /**
      * deallocate space in memory for data at input address 
      */
 
+    //ensure address given isn't null
+    if(address == NULL)
+    {
+        printf("\nCannot free NULL address.\n");
+        return;
+    }
+
     // Base case where after removing, the start of heap will be NUll
-    // This will need to be modified for your own implementation!
-    BYTE *target_address = address - sizeof(structinfo);
-    structinfo *chunk = (structinfo*) target_address;
+    BYTE *target_address = address - sizeof(blockInfo);
+    blockInfo *block = (blockInfo*) target_address;
     startofheap = NULL;
-    sbrk(-(chunk->size)); // Not always required, only when we need to move the program break back!
+    sbrk(-(block->size)); // Not always required, only when we need to move the program break back!
 }
 
 void testCase1()
