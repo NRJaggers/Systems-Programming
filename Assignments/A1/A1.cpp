@@ -31,7 +31,6 @@ using namespace std;
 typedef unsigned char BYTE;
 
 //global variables
-void *retAdd = NULL;        //var to hold return address for program break
 void *startofheap = NULL;   //var to hold start address of heap
 
 //struct definition for memory block info
@@ -48,7 +47,10 @@ void welcome();
 void analyze();
 BYTE* mymalloc(int demand);
 void myfree(BYTE *address);
+blockInfo* addBlock(int, blockInfo*);
 blockInfo* merge(blockInfo*,blockInfo*);
+void split(blockInfo*,int);
+blockInfo* get_last_chunk();
 void testCase1();
 void testCase2();
 void testCase3();
@@ -60,13 +62,13 @@ int main()
 
 //RUN DESIRED TEST
     //run test 1 - test for proper operation. Code as seen in Assignment document 
-    //testCase1();
+    testCase1();
 
     //run test 2 - test for speed of operation. Code as seen in Assignment document
     //testCase2();
 
     //run other tests - feel free to run other tests here
-
+    //testCase3();
 
 //EXIT
     return 0;
@@ -115,14 +117,17 @@ void analyze()
     //show where program break is
     printf("program break on address: %p\n\n",sbrk(0)); 
 } 
-//***what happens if you pass in zero? What should happen? negative? What happend and what should?
-//maybe return null on zero and change int parameter to unsigned int to handle negatives? - test after getting some stuff going
+
 BYTE* mymalloc(int demand)
 {
     /**
      * allocate space in memory for desired size and return start address for chunk in memory 
      */
 
+    //if demanded memeory is 0 or less, return null address
+    if (demand < 1)
+        return NULL;
+    
     //declare and initialize variables to help create new chunk in memory
     int demand_bytes = demand + sizeof(blockInfo);
     int page_required = demand_bytes / PAGESIZE + 1;
@@ -131,49 +136,33 @@ BYTE* mymalloc(int demand)
     //different cases for status of heap when adding/allocating memory for data   
     if (startofheap == NULL)
     {
-        //before allocating anything, save return address for program break
-        retAdd = sbrk(0);
-
-        //move program break and initialize chunk with start of new memory info
-        blockInfo *block = (blockInfo*) sbrk(sizeof(blockInfo));
-        
-        //fill in meta data about memory block
-        block->size = real_demand;
-        block->status = 1;
-        block->prev = NULL;
-        block->next = NULL;
-
-        //define as start of heap
-        startofheap = block;
-
-        //move program break for data portion of block
-        sbrk(real_demand - sizeof(blockInfo));
+        //start heap by adding new block
+        blockInfo *newBlock = addBlock(real_demand, NULL);
+        startofheap = newBlock;
         
         //return address for start of data in memory block
-        return (BYTE*) block + sizeof(blockInfo);
+        return (BYTE*) newBlock + sizeof(blockInfo);
     }
 
     //if startofheap has an address, go through memory chunks and find the first best fit
     blockInfo *current = (blockInfo*) startofheap;
     blockInfo *bestfit = NULL;
-    blockInfo *last = NULL;
 
-    while(current != NULL) {
-        //while steping though, keep track of last memory block
-        last = current;
+    while(current != NULL) 
+    {
 
         //check if current chunk is free and is greater or equal to memory demand
         if(current->status == 0 && current->size >= real_demand) {
             
             //check if best fit is null or if best fit size is greater than current size
-            if(bestfit == NULL) 
+            if(bestfit == NULL || bestfit->size > current->size) 
             {
                 bestfit = current;
             }
-            else if(bestfit->size > current->size)
-            {
-                bestfit = current;
-            }
+            // else if(bestfit->size > current->size)
+            // {
+            //     bestfit = current;
+            // }
         }
         //step to next memory block
         current = current->next;
@@ -181,27 +170,20 @@ BYTE* mymalloc(int demand)
 
     //if best fit is null, that means we must add a new memory chunk
     //if not we need to check the best fit block and our demand to determine if we split the block
-    if(bestfit == NULL) {
-        //create a new chunk
-        //move program break and initialize chunk with start of new memory info
-        blockInfo *block = (blockInfo*) sbrk(sizeof(blockInfo));
-        
-        //fill in meta data about memory block
-        block->size = real_demand;
-        block->status = 1;
-        block->prev = last;
-        block->next = NULL;
+    if(bestfit == NULL) 
+    {
+        //find last block in memory
+        blockInfo *last = get_last_chunk();
 
-        //finish linking memory blocks
-        last->next = block;
-
-        //move program break for data portion of block
-        sbrk(real_demand - sizeof(blockInfo));
+        //create a new chunk and link memory blocks
+        blockInfo *newBlock = addBlock(real_demand, last);
+        last->next = newBlock;
         
         //return address for start of data in memory block
-        return (BYTE*) block + sizeof(blockInfo);
+        return (BYTE*) newBlock + sizeof(blockInfo);
     }
-    else {
+    else 
+    {
         //does our best fit need to be split?
         //does it have more pages than our real demand requires?
 
@@ -209,24 +191,7 @@ BYTE* mymalloc(int demand)
         bestfit->status = 1;
 
         //check for split
-        if(bestfit->size > real_demand)
-        {
-            //start at best fit address and move to address after demand is met
-            blockInfo *remaining = (blockInfo*)((BYTE*)bestfit + real_demand);
-
-            //update remaining info
-            remaining->size = bestfit->size - real_demand;
-            remaining->status = 0; 
-
-            //update best fit info
-            bestfit->size = real_demand;
-
-            //relink memory
-            remaining->next = bestfit->next;
-            remaining->prev = bestfit;
-            bestfit->next = remaining;
-
-        }
+        split(bestfit, real_demand);
 
         //return address for requested memory
         return (BYTE*) bestfit + sizeof(blockInfo);
@@ -235,15 +200,14 @@ BYTE* mymalloc(int demand)
 
     return NULL;
 }
-//make sure to parallel with myMalloc
-//if you add a case for null there, do it here too!
+
 void myfree(BYTE *address)
 {
     /**
      * deallocate space in memory for data at input address 
      */
 
-    //ensure address given isn't null
+    //ensure address given isn't null and skip if already freed
     if(address == NULL)
     {
         printf("\nCannot free NULL address.\n");
@@ -256,18 +220,14 @@ void myfree(BYTE *address)
     //free the chunk
     block->status = 0;
 
-    //save pointers for next and previous from current
-    blockInfo *prev_block = (blockInfo*)block->prev;
-    blockInfo *next_block = (blockInfo*)block->next;
-
     //check if previous block exists and is free
-    if(prev_block != NULL && prev_block->status == 0) {
+    if(block->prev != NULL && block->prev->status == 0) {
         //previous block exits and is free. Merge previous and current block
-        block = merge(prev_block, block);
+        block = merge(block->prev, block);
     }
 
     //check if next block exists
-    if(next_block == NULL) {
+    if(block->next == NULL) {
 
         //if previous block is also null, we are at startofheap
         //reassign startofheap to null, otherwise unlink current block from memory
@@ -279,22 +239,42 @@ void myfree(BYTE *address)
         //at end of list, move program break
         sbrk(-(block->size));
 
-
     }
-    else if(next_block->status == 0) {
+    else if(block->next->status == 0) {
         //next block exists and is free. Merge current and next block
-        block = merge(block, next_block);
+        block = merge(block, block->next);
 
     }
 
 }
 
-blockInfo* merge(blockInfo *firstAddress, blockInfo *secondAddress)
+blockInfo* addBlock(int size, blockInfo *prevBlock)
 {
-    //ensure both addresses are not NULL
-    // if(firstAddress == NULL || secondAddress == NULL)
-    //     return NULL;
+    /**
+     * add new memory block to heap
+     */
+
+    //move program break and initialize chunk with start of new memory info
+    blockInfo *block = (blockInfo*) sbrk(sizeof(blockInfo));
     
+    //fill in meta data about memory block
+    block->size = size;
+    block->status = 1;
+    block->prev = prevBlock;
+    block->next = NULL;
+
+    //move program break for data portion of block
+    sbrk(size - sizeof(blockInfo));
+
+    return block;
+}
+
+blockInfo* merge(blockInfo *firstAddress, blockInfo *secondAddress)
+{   
+    /**
+     * merge two adjacent free blocks of memory
+     */
+
     //add the sizes of the addresses together
     firstAddress->size += secondAddress->size;
 
@@ -307,6 +287,48 @@ blockInfo* merge(blockInfo *firstAddress, blockInfo *secondAddress)
     //return start address of new merged block
     return firstAddress;
 }
+
+void split(blockInfo* block, int memRequest)
+{
+    /**
+     * split block of memory from what is required and its remaining available memory (by page size)
+     */
+
+    if(block->size > memRequest)
+    {
+        //start at best fit address and move to address after demand is met
+        blockInfo *remaining = (blockInfo*)((BYTE*)block + memRequest);
+
+        //update remaining info
+        remaining->size = block->size - memRequest;
+        remaining->status = 0; 
+
+        //update best fit info
+        block->size = memRequest;
+
+        //relink memory
+        remaining->next = block->next;
+        remaining->prev = block;
+        block->next->prev = remaining;
+        block->next = remaining;
+
+    }
+}
+
+blockInfo* get_last_chunk()
+ {
+    /**
+     * finding last chunk in heap
+     */
+
+    if(!startofheap)
+        return NULL;
+
+    blockInfo* ch = (blockInfo*)startofheap; 
+    for (; ch->next != NULL; ch = ch->next);
+
+    return ch; 
+ }
 
 void testCase1()
 {
@@ -375,5 +397,41 @@ void testCase2()
 
 void testCase3()
 {
+     BYTE*a[10];
 
+    analyze();
+    a[0] = mymalloc(10000);
+    a[1] = mymalloc(30000);
+    analyze();
+    myfree(a[0]);
+    analyze();
+    a[0] = mymalloc(8000);
+    analyze();
+    myfree(a[1]);
+    analyze();
+    a[1] = mymalloc(12000);
+    a[2] = mymalloc(4000);
+    a[3] = mymalloc(1);
+    analyze();
+    myfree(a[1]);
+    myfree(a[2]);
+    analyze();
+    a[1] = mymalloc(1);
+    a[2] = mymalloc(10000);
+    analyze();
+
+    myfree(a[0]);
+    myfree(a[1]);
+    myfree(a[2]);
+    analyze();
+    myfree(a[0]);
+    myfree(a[3]);
+    analyze();
+
+
+    // for(int i=0;i<10;i++)
+    // a[i]= mymalloc(1000);
+
+    // for(int i=0;i<10;i++)
+    //     myfree(a[i]);
 }
