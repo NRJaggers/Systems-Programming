@@ -12,7 +12,7 @@ DESCRIPTION - This program manages memory and simulates
             - memory is requested, the ammount is analyzed
             - and an allocated free space or new page(s)
             - is created to store data. When there is no
-            - need for that space anymore, it is "freed".
+            - need for that space anymore, it is "freed".bb
             - What happens when a space is "freed" actually
             - depends on where it is in memory. It may just
             - be marked as a free space or actually deallocated
@@ -23,6 +23,7 @@ DESCRIPTION - This program manages memory and simulates
 #include <unistd.h>
 #include <stdio.h>
 #include <time.h>
+#include <sys/time.h>
 
 using namespace std;
 
@@ -50,6 +51,7 @@ void myfree(BYTE *address);
 blockInfo* merge(blockInfo*,blockInfo*);
 void testCase1();
 void testCase2();
+void testCase3();
 
 int main()
 {
@@ -58,7 +60,7 @@ int main()
 
 //RUN DESIRED TEST
     //run test 1 - test for proper operation. Code as seen in Assignment document 
-    testCase1();
+    //testCase1();
 
     //run test 2 - test for speed of operation. Code as seen in Assignment document
     //testCase2();
@@ -342,9 +344,12 @@ void testCase2()
     //create byte pointer and clock variables to hold data and time
     BYTE*a[100];
     clock_t ca, cb;
+    timeval start, end;
+
 
     //get time before starting process
-    ca = clock();
+    //ca = clock();
+    gettimeofday(&start,NULL);
 
     for(int i=0;i<100;i++)
         a[i]= mymalloc(1000);
@@ -359,9 +364,16 @@ void testCase2()
         myfree(a[i]);
 
     //get time after finishing process
-    cb = clock();
-    
+    //cb = clock();
+    gettimeofday(&end,NULL);
+
     //print time results of process
-    printf("\nduration: % f\n", (double)(cb - ca));
+    //printf("\nduration: % f\n", (double)(cb - ca));
+    printf("\nduration: % f\n", (double)(1000000 * (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec)));
+
+}
+
+void testCase3()
+{
 
 }
