@@ -38,7 +38,7 @@ typedef struct memoryBlockInfo
 {
     int size;           //size of memory block
     int status;         //0 for free, 1 for occupied
-    blockInfo *next, *prev;  //holds addresses to adjacent blocks of memory (starting at info address not data)
+    memoryBlockInfo *next, *prev;  //holds addresses to adjacent blocks of memory (starting at info address not data)
 
 }blockInfo;
 
@@ -47,6 +47,7 @@ void welcome();
 void analyze();
 BYTE* mymalloc(int demand);
 void myfree(BYTE *address);
+blockInfo* merge(blockInfo*,blockInfo*);
 void testCase1();
 void testCase2();
 
@@ -57,7 +58,7 @@ int main()
 
 //RUN DESIRED TEST
     //run test 1 - test for proper operation. Code as seen in Assignment document 
-    //testCase1();
+    testCase1();
 
     //run test 2 - test for speed of operation. Code as seen in Assignment document
     //testCase2();
@@ -202,11 +203,14 @@ BYTE* mymalloc(int demand)
         //does our best fit need to be split?
         //does it have more pages than our real demand requires?
 
+        //mark block as occupied
+        bestfit->status = 1;
+
         //check for split
         if(bestfit->size > real_demand)
         {
             //start at best fit address and move to address after demand is met
-            blockInfo *remaining = (blockInfo*)((BYTE)bestfit + real_demand);
+            blockInfo *remaining = (blockInfo*)((BYTE*)bestfit + real_demand);
 
             //update remaining info
             remaining->size = bestfit->size - real_demand;
@@ -214,7 +218,6 @@ BYTE* mymalloc(int demand)
 
             //update best fit info
             bestfit->size = real_demand;
-            bestfit->status = 1;
 
             //relink memory
             remaining->next = bestfit->next;
@@ -245,11 +248,62 @@ void myfree(BYTE *address)
         return;
     }
 
-    // Base case where after removing, the start of heap will be NUll
     BYTE *target_address = address - sizeof(blockInfo);
     blockInfo *block = (blockInfo*) target_address;
-    startofheap = NULL;
-    sbrk(-(block->size)); // Not always required, only when we need to move the program break back!
+
+    //free the chunk
+    block->status = 0;
+
+    //save pointers for next and previous from current
+    blockInfo *prev_block = (blockInfo*)block->prev;
+    blockInfo *next_block = (blockInfo*)block->next;
+
+    //check if previous block exists and is free
+    if(prev_block != NULL && prev_block->status == 0) {
+        //previous block exits and is free. Merge previous and current block
+        block = merge(prev_block, block);
+    }
+
+    //check if next block exists
+    if(next_block == NULL) {
+
+        //if previous block is also null, we are at startofheap
+        //reassign startofheap to null, otherwise unlink current block from memory
+        if(block->prev == NULL)
+            startofheap = NULL;
+        else
+            block->prev->next = NULL;
+
+        //at end of list, move program break
+        sbrk(-(block->size));
+
+
+    }
+    else if(next_block->status == 0) {
+        //next block exists and is free. Merge current and next block
+        block = merge(block, next_block);
+
+    }
+
+}
+
+blockInfo* merge(blockInfo *firstAddress, blockInfo *secondAddress)
+{
+    //ensure both addresses are not NULL
+    // if(firstAddress == NULL || secondAddress == NULL)
+    //     return NULL;
+    
+    //add the sizes of the addresses together
+    firstAddress->size += secondAddress->size;
+
+    //relink addresses
+    firstAddress->next = secondAddress->next;
+    if(secondAddress->next != NULL)
+        secondAddress->next->prev = firstAddress;
+    
+
+    //return start address of new merged block
+    return firstAddress;
 }
 
 void testCase1()
@@ -262,16 +316,17 @@ void testCase1()
     BYTE*a[100];
 
     analyze();//50% points
+
     for(int i=0;i<100;i++)
         a[i]= mymalloc(1000);
     for(int i=0;i<90;i++)
         myfree(a[i]);
-
     analyze(); //50% of points if this is correct
+
     myfree(a[95]);
     a[95] = mymalloc(1000);
-
     analyze();//25% points, this new chunk should fill the smaller free one (best fit)
+
     for(int i=90;i<100;i++)
         myfree(a[i]);
     analyze();// 25% should be an empty heap now with the start address from the program start
