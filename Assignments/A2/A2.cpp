@@ -58,7 +58,7 @@ typedef struct BITMAPFILE
 {
     BMFH fileHeader;    //holds image file header data
     BMIH infoHeader;    //holds image info header data
-    BYTE imageData;     //holds image data
+    BYTE *imageData;     //holds image data
 }BMP;
 
 void welcome();
@@ -67,7 +67,7 @@ void readHeaders(BMFH& , BMIH&, FILE*);
 void writeHeaders(BMFH& , BMIH&, FILE*);
 BMP  readImage(char*);
 void writeImage(BMP, char*);
-void blendImages(BMP&, BMP&, BMP&);
+BMP blendImages(BMP&, BMP&);
 BYTE get_red(BYTE *imagedata,float x,float y, int imagewidth, int imageheight);
 
 int main(int argc, char** argv)
@@ -94,23 +94,37 @@ int main(int argc, char** argv)
     //read in second user defined image
     BMP image2 = readImage(inputfile2);
 
+    // if either image is null, exit the program
+    if((image1.imageData == NULL) || (image2.imageData == NULL))
+    {
+        printf(
+                "At least one of the images was invalid.\n"
+                "Exiting...\n"
+              );
+        return -1;
+    }
+
 //ALLOCATE SPACE FOR RESULTING IMAGE
-    //create and allocate memory for new image
-    BMP newImage;
-    //newImage.imageData = 
+    //create space for new image
+    BMP image3;
 
 //BLEND IMAGES
     //blend images and store results in new image
     //depending on which is bigger
-    blendImages(image1, image2, newImage);
+    if(image1.infoHeader.biXPelsPerMeter>image2.infoHeader.biXPelsPerMeter)
+        image3 = blendImages(image1, image2);
+    else
+        image3 = blendImages(image2, image1);
 
 //WRITE NEW IMAGE TO NEW FILE
     //
-    writeImage(newImage,outputfile);
+    writeImage(image3,outputfile);
 
 //CLEAN UP
-    //close files?
     //release any allocated memory
+    free(image1.imageData);
+    free(image2.imageData);
+    //free(image3.imageData);
 
 //EXIT
     return 0;
@@ -122,6 +136,12 @@ void welcome()
     /**
      * prints welcome message for user
      */
+    printf( 
+            "\n------------------------------------------------------------\n"
+            "Hello! Welcome to Assignment 2 where we blend two images\n"
+            "specified by the user and display our results.\n"
+            "------------------------------------------------------------\n\n"    
+        );
 }
 
 void manual()
@@ -130,16 +150,22 @@ void manual()
      * prints manual on how to use program for user
      */
 
-    /******SOMETHING LIKE THIS BUT IT NEED WORK*******/
+    printf(
+           "To use this program, you need to provide 5 arguments to the\n"
+           "command line. You need to provide the name of this program to\n"
+           "run it, followed by the two images you would like to blend,\n"
+           "the blend ratio, and the name you would like to give the\n"
+           "output file. The command should look the the following:\n\n"
+           
+           "./[programname] [imagefile1] [imagefile2] [ratio] [outputfile]\n\n"
 
-    // ./yourprogram [IMAGEFILE] [COLOR GRADING] [OUTPUTFILE]
+           "[imagefile1] - first 24 bit per pixel BMP\n"
+           "[imagefile2] - second 24 bit per pixel BMP\n"
+           "     [ratio] - blend ratio ratio of images with respect to first image\n"
+           "               ex. 1 is all first image, 0.5 is half and half, 0 is all of second image\n"
+           "[outputfile] - desired name of resulting image file.\n\n"
 
-    // [IMAGEFILE] that’s your bitmap
-    // [COLOR GRADING] three float number between 0 and 1 representing red, green and blue (RGB)
-    // [OUTPUTFILE] the output file
-
-    // ./lab3   [input.bmp] [R] [G] [B] [output.bmp] 
-    // argv[0]  argv[1]     argv[2:4]   argv[5] 
+           );
 }
 
 void readHeaders(BMFH& filehead, BMIH& infohead, FILE *readFile)
@@ -169,19 +195,83 @@ void writeHeaders(BMFH& filehead, BMIH& infohead, FILE *writeFile)
      fwrite(&infohead, sizeof(infohead), 1, writeFile);
 };
 
-BMP  readImage(char*)
+BMP  readImage(char* input_image_filename)
 {
-    BMP test;
-    return test;
+    /**
+     * reads data into a BMP struct and returns results
+     */
+
+    //declare image object to return
+    BMP image;
+
+//READ DATA
+    //open file using input.bmp command line arg as read binary
+    FILE *file = fopen(input_image_filename, "rb");
+
+    //check for proper open
+    if (file == NULL)
+    {
+        printf("Could not open file, please try again\n");
+        image.imageData = NULL;
+        return image; 
+    }
+
+    //read in data
+    readHeaders(image.fileHeader, image.infoHeader, file);
+
+//ALLOCATE MEMORY TO STORE DATA
+    //allocate memory to store read in data
+    image.imageData = (BYTE*) malloc(image.infoHeader.biSizeImage);
+
+    //read in image data
+    fread(image.imageData, image.infoHeader.biSizeImage, 1, file);
+
+    //close input file
+    fclose(file);
+
+    return image;
 }
 
-void writeImage(BMP, char*)
+void writeImage(BMP image, char* output_image_filename)
 {
+    /**
+     * writes data from a BMP struct into a file
+     */
 
+    //WRITE DATA
+    //open file using output.bmp command line arg as write binary
+     FILE *newFile = fopen(output_image_filename, "wb");
+
+    //check for proper open
+     if (newFile == NULL)
+     {
+         printf("Could not open file, please try again\n");
+         return; 
+     }
+
+    //write info and data to newfile
+    writeHeaders(image.fileHeader, image.infoHeader, newFile);
+    fwrite(image.imageData, image.infoHeader.biSizeImage, 1, newFile);
+
+    //close file
+     fclose(newFile);
 }
 
-void blendImages(BMP&, BMP&, BMP&)
+BMP blendImages(BMP& higher_resolution, BMP& lower_resolution)
 {
+    /**
+     * Takes two input images and blends them together.
+     * Results are stored and returned in a BMP object
+     */
+
+    //create temp to hold new image data
+    BMP newImage;
+
+    //set new image to same size as high resolution image
+    newImage.fileHeader = higher_resolution.fileHeader;
+    newImage.infoHeader = higher_resolution.infoHeader;
+    newImage.imageData = (BYTE*) malloc(higher_resolution.infoHeader.biSizeImage);
+    
     // Loop over the bigger one:
     // Loop in x
     // Loop in y
@@ -193,6 +283,8 @@ void blendImages(BMP&, BMP&, BMP&)
     // //and green, blue
     // Blend the colors
     // Assign them into the resultimage
+
+    return newImage;
 }
 
 BYTE get_red(BYTE *imagedata,float x,float y, int imagewidth, int imageheight)
