@@ -61,14 +61,16 @@ typedef struct BITMAPFILE
     BYTE *imageData;     //holds image data
 }BMP;
 
+//function prototypes
 void welcome();
 void manual();
 void readHeaders(BMFH& , BMIH&, FILE*);
 void writeHeaders(BMFH& , BMIH&, FILE*);
 BMP  readImage(char*);
 void writeImage(BMP, char*);
-BMP blendImages(BMP&, BMP&);
-BYTE get_red(BYTE *imagedata,float x,float y, int imagewidth, int imageheight);
+BMP blendImages(BMP&, BMP&, float);
+float interpolate_color(BMP, float, float, int);
+float get_color(BMP, int, int, int);
 
 int main(int argc, char** argv)
 {
@@ -110,11 +112,7 @@ int main(int argc, char** argv)
 
 //BLEND IMAGES
     //blend images and store results in new image
-    //depending on which is bigger
-    if(image1.infoHeader.biXPelsPerMeter>image2.infoHeader.biXPelsPerMeter)
-        image3 = blendImages(image1, image2);
-    else
-        image3 = blendImages(image2, image1);
+        image3 = blendImages(image1, image2, ratio);
 
 //WRITE NEW IMAGE TO NEW FILE
     //
@@ -124,7 +122,7 @@ int main(int argc, char** argv)
     //release any allocated memory
     free(image1.imageData);
     free(image2.imageData);
-    //free(image3.imageData);
+    free(image3.imageData);
 
 //EXIT
     return 0;
@@ -257,12 +255,29 @@ void writeImage(BMP image, char* output_image_filename)
      fclose(newFile);
 }
 
-BMP blendImages(BMP& higher_resolution, BMP& lower_resolution)
+BMP blendImages(BMP& firstImage, BMP& secondImage, float blendRatio)
 {
     /**
      * Takes two input images and blends them together.
      * Results are stored and returned in a BMP object
      */
+
+    //determine which image has higher resolution
+    //take inverse of blend ratio if needed
+    BMP higher_resolution;
+    BMP lower_resolution;
+
+    if(firstImage.infoHeader.biXPelsPerMeter>=secondImage.infoHeader.biXPelsPerMeter)
+    {
+        higher_resolution = firstImage;
+        lower_resolution  = secondImage;
+    }
+    else
+    {
+        higher_resolution = secondImage;
+        lower_resolution  = firstImage;
+        blendRatio = 1-blendRatio;
+    }
 
     //create temp to hold new image data
     BMP newImage;
@@ -271,6 +286,10 @@ BMP blendImages(BMP& higher_resolution, BMP& lower_resolution)
     newImage.fileHeader = higher_resolution.fileHeader;
     newImage.infoHeader = higher_resolution.infoHeader;
     newImage.imageData = (BYTE*) malloc(higher_resolution.infoHeader.biSizeImage);
+    
+    //get more specific how you are gonna do this
+    //can reference pdf and notes
+    //also can use old lab work for padding
     
     // Loop over the bigger one:
     // Loop in x
@@ -284,11 +303,101 @@ BMP blendImages(BMP& higher_resolution, BMP& lower_resolution)
     // Blend the colors
     // Assign them into the resultimage
 
+     //check for padding on width of pixels for high resolution image
+    int widthBytesBig = higher_resolution.infoHeader.biWidth * 3; //pixels*(Byte/pixels)
+    if(widthBytesBig %4 != 0)
+    {
+        widthBytesBig += (4-(widthBytesBig%4));
+    }
+
+    //determine equivalent increment for low res image
+    float xInc = (float) lower_resolution.infoHeader.biWidth/higher_resolution.infoHeader.biWidth;
+    float yInc = (float) lower_resolution.infoHeader.biHeight/higher_resolution.infoHeader.biHeight;
+    float interpretPixel_x;
+    float interpretPixel_y;
+
+    //loop through rows and columns to change RGB values
+    int offset = 0;
+    float bBig, gBig, rBig, bSmall, gSmall, rSmall;
+    
+    for(int rows = 0; rows < higher_resolution.infoHeader.biHeight; rows++)
+    {
+        for(int cols = 0; cols < higher_resolution.infoHeader.biWidth; cols++)
+        {
+            //determine offset to access current pixel for high res image
+            offset = (rows*widthBytesBig) + (cols*3);
+
+            //get colors for high res image
+            bBig = higher_resolution.imageData[offset+BLUE]; 
+            gBig = higher_resolution.imageData[offset+GREEN]; 
+            rBig = higher_resolution.imageData[offset+RED];
+
+            //get coordinates between pixels for equivalent spot in low res image
+            interpretPixel_x =  cols * xInc;
+            interpretPixel_y = rows * yInc;
+            
+            //get colors for low res image
+            bSmall = interpolate_color(lower_resolution, interpretPixel_x, interpretPixel_y, BLUE);
+            gSmall = interpolate_color(lower_resolution, interpretPixel_x, interpretPixel_y, GREEN);
+            rSmall = interpolate_color(lower_resolution, interpretPixel_x, interpretPixel_y, RED);
+
+            //image of same size
+            // bSmall = lower_resolution.imageData[offsetLow+BLUE]; 
+            // gSmall = lower_resolution.imageData[offsetLow+GREEN]; 
+            // rSmall = lower_resolution.imageData[offsetLow+RED];
+
+            //store result into allocated memory
+            newImage.imageData[offset + BLUE]  = (BYTE)(bBig)*(blendRatio) + (bSmall)*(1-blendRatio);
+            newImage.imageData[offset + GREEN] = (BYTE)(gBig)*(blendRatio) + (gSmall)*(1-blendRatio);
+            newImage.imageData[offset + RED]   = (BYTE)(rBig)*(blendRatio) + (rSmall)*(1-blendRatio);
+
+        }
+    }
+
     return newImage;
 }
 
-BYTE get_red(BYTE *imagedata,float x,float y, int imagewidth, int imageheight)
+float interpolate_color(BMP image, float x, float y, int color)
 {
-    BYTE test;
-    return test;
+    //define place for result and define coordinates
+    float result;
+    int x1 = x, x2 = x+1, y1 = y, y2 = y+1;
+    float dx = x-x1, dy = y-y1;
+
+
+    //get colors from surrounding pixels
+    float leftUp = get_color(image, x, y, color);
+    float leftDown = get_color(image, x, y, color);
+    float rightUp = get_color(image, x, y, color);
+    float rightDown = get_color(image, x, y, color);
+
+    //calculate interpoated color
+    //the closer it is the stronger the weight should be
+    float left = leftUp * dy + leftDown * (1 - dy);
+    float right = rightUp * dy + rightDown * (1 - dy);
+    result = left * (1 - dx) + right * dx;
+
+    //return result
+    return result;
+}
+
+float get_color(BMP image, int x, int y, int color)
+{
+    //define variable to return value of color at desired location
+    float colorValue;
+
+    //check for padding on width of pixels for low resolution image
+    int widthBytes = image.infoHeader.biWidth * 3; //pixels*(Byte/pixels)
+    if(widthBytes %4 != 0)
+    {
+        widthBytes += (4-(widthBytes%4));
+    }
+
+    int offset = y*widthBytes + x*3 +color;
+
+    //get color at desired location
+    colorValue = image.imageData[offset];
+
+    //return result
+    return colorValue;
 }
