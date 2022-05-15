@@ -115,7 +115,6 @@ int main(int argc, char** argv)
         image3 = blendImages(image1, image2, ratio);
 
 //WRITE NEW IMAGE TO NEW FILE
-    //
     writeImage(image3,outputfile);
 
 //CLEAN UP
@@ -267,7 +266,7 @@ BMP blendImages(BMP& firstImage, BMP& secondImage, float blendRatio)
     BMP higher_resolution;
     BMP lower_resolution;
 
-    if(firstImage.infoHeader.biXPelsPerMeter>=secondImage.infoHeader.biXPelsPerMeter)
+    if(firstImage.infoHeader.biWidth>=secondImage.infoHeader.biWidth)
     {
         higher_resolution = firstImage;
         lower_resolution  = secondImage;
@@ -286,22 +285,6 @@ BMP blendImages(BMP& firstImage, BMP& secondImage, float blendRatio)
     newImage.fileHeader = higher_resolution.fileHeader;
     newImage.infoHeader = higher_resolution.infoHeader;
     newImage.imageData = (BYTE*) malloc(higher_resolution.infoHeader.biSizeImage);
-    
-    //get more specific how you are gonna do this
-    //can reference pdf and notes
-    //also can use old lab work for padding
-    
-    // Loop over the bigger one:
-    // Loop in x
-    // Loop in y
-    // //Get the coords from the smaller image:
-    // x_2 = … x …;
-    // y_2 = … y …;
-    // get the color from image 2:
-    // get_red(imagedata2,x_2,y_2,…);
-    // //and green, blue
-    // Blend the colors
-    // Assign them into the resultimage
 
      //check for padding on width of pixels for high resolution image
     int widthBytesBig = higher_resolution.infoHeader.biWidth * 3; //pixels*(Byte/pixels)
@@ -341,11 +324,6 @@ BMP blendImages(BMP& firstImage, BMP& secondImage, float blendRatio)
             gSmall = interpolate_color(lower_resolution, interpretPixel_x, interpretPixel_y, GREEN);
             rSmall = interpolate_color(lower_resolution, interpretPixel_x, interpretPixel_y, RED);
 
-            //image of same size
-            // bSmall = lower_resolution.imageData[offsetLow+BLUE]; 
-            // gSmall = lower_resolution.imageData[offsetLow+GREEN]; 
-            // rSmall = lower_resolution.imageData[offsetLow+RED];
-
             //store result into allocated memory
             newImage.imageData[offset + BLUE]  = (BYTE)(bBig)*(blendRatio) + (bSmall)*(1-blendRatio);
             newImage.imageData[offset + GREEN] = (BYTE)(gBig)*(blendRatio) + (gSmall)*(1-blendRatio);
@@ -363,7 +341,6 @@ float interpolate_color(BMP image, float x, float y, int color)
     float result;
     int x1 = x, x2 = x+1, y1 = y, y2 = y+1;
     float dx = x-x1, dy = y-y1;
-
 
     //get colors from surrounding pixels
     float leftUp = get_color(image, x, y, color);
