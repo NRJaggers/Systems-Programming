@@ -64,7 +64,7 @@ int main()
 //OTHER SET UP
     char *parsedInput[ARRAY_SIZE];
     char  currDir[PATH_SIZE];
-    char  *filePaths[CHILD_MAX];
+    char  filePaths[PATH_SIZE] = {0};
     int   searchTask[CHILD_MAX] = {0};
     int argLen; 
 
@@ -107,7 +107,7 @@ int main()
                     else if(!strcmp(parsedInput[2], "-s")) {
                         //search current directory and subdirectories
                         getcwd(currDir, PATH_SIZE);
-                        searchDir(currDir, parsedInput[1], filePaths[0]);
+                        searchDir(currDir, parsedInput[1], filePaths);
 
                         //write to pipe fd[1]
                         //write(fd[1],filePaths[num] ,PATH_MAX);
@@ -134,7 +134,7 @@ int main()
 
                     //search for file in current directory
                     getcwd(currDir, PATH_SIZE);
-                    findFile(currDir, parsedInput[1], filePaths[0]);
+                    findFile(currDir, parsedInput[1], filePaths);
                     
                     //write to pipe fd[1]
                     //write(fd[1],filePaths[num] ,PATH_MAX);
@@ -222,6 +222,7 @@ int getInput(char *arg_tokens[ARRAY_SIZE])
         num_args++;
     }
 
+    strtok(NULL, " ");
     return num_args;
 }
 
@@ -239,6 +240,9 @@ void findFile(char* cwd, char *searchName, char* fileFoundPath)
     //define variables to help traverse files in directory and return result
     DIR *directory;
     dirent *entry;
+    //getting weird behavior with searchName. Saving data to temp.
+    char temp[100];
+    strcpy(temp,searchName);
 
     //open current directory
     directory = opendir(cwd);
@@ -252,11 +256,11 @@ void findFile(char* cwd, char *searchName, char* fileFoundPath)
         //printf("%s %s",entry->d_name, searchName);
         //fflush(stdout);
 
-        if (!strcmp(entry->d_name, searchName))
+        if (!strcmp(entry->d_name, temp))
         {
             strcat(fileFoundPath, cwd);
             strcat(fileFoundPath, "/");
-            strcat(fileFoundPath,searchName);
+            strcat(fileFoundPath, temp);
             strcat(fileFoundPath, "\n");
         }
 
