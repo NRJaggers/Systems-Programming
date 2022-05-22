@@ -216,13 +216,16 @@ int getInput(char *arg_tokens[ARRAY_SIZE])
     {
         //if token will fit in array, place it in
         if (num_args<ARRAY_SIZE)
+        {
             arg_tokens[num_args] = token;
+            //strcpy(arg_tokens[num_args], token);
+        }
 
+        //token = strtok(NULL, " ");
         token = strtok(NULL, " ");
         num_args++;
     }
 
-    strtok(NULL, " ");
     return num_args;
 }
 
@@ -256,7 +259,7 @@ void findFile(char* cwd, char *searchName, char* fileFoundPath)
         //printf("%s %s",entry->d_name, searchName);
         //fflush(stdout);
 
-        if (!strcmp(entry->d_name, temp))
+        if ((entry->d_type == DT_REG) && (!strcmp(entry->d_name, temp)))
         {
             strcat(fileFoundPath, cwd);
             strcat(fileFoundPath, "/");
@@ -274,8 +277,12 @@ void findFile(char* cwd, char *searchName, char* fileFoundPath)
 
 void searchDir(char* cwd, char *searchName, char* fileFoundPath)
 {
+    //weird behavior in loosing search name
+    char temp[INPUT_SIZE];
+    strcpy(temp,searchName);
+
     //search current directory
-    findFile(cwd, searchName, fileFoundPath);
+    findFile(cwd, temp, fileFoundPath);
 
     //search other directories
     //define variables to help traverse files in directory
@@ -284,12 +291,27 @@ void searchDir(char* cwd, char *searchName, char* fileFoundPath)
 
     while(entry) {
         //is the entry a directory? recursion to traverse directories!
-        if(entry -> d_type == DT_DIR) {
-            char newcwd[PATH_MAX];
-            strcat(newcwd, cwd);
-            strcat(newcwd, entry -> d_name); 
-            searchDir(newcwd, searchName, fileFoundPath);
+        if(entry -> d_type == DT_DIR) 
+        {
+            if (!((strcmp(entry->d_name,".")==0)||(strcmp(entry->d_name,"..")==0)))
+            {
+                //debugging mark
+                if(strcmp(entry->d_name,"Lab2")==0)
+                {
+                    int num = 0; 
+                }
+
+                char newcwd[PATH_SIZE] = {0};
+                strcat(newcwd, cwd);
+                strcat(newcwd, "/");
+                strcat(newcwd, entry -> d_name); 
+                searchDir(newcwd, temp, fileFoundPath);
+            }
+
         }
+
+        // read next entry in directory
+        entry = readdir(directory);
     }
 
     closedir(directory);
