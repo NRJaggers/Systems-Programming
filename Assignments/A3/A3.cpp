@@ -14,6 +14,7 @@ DESCRIPTION - This program ...
 #include <dirent.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <wait.h>
 
 
 using namespace std;
@@ -38,6 +39,7 @@ int getInput(char**);
 int getArgLen(char**);
 void findFile(char*, char*, char*);
 void searchDir(char*, char*, char*);
+int freeChild(int*);
 void signalHandler(int i);
 
 
@@ -60,6 +62,16 @@ int main()
     //set up shared variables
     //holds pids of children that are searching
     int *searches = (int*) mmap(NULL, sizeof(int)*CHILD_MAX, PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+    //indicates when print is ready
+    int *interruptFlag = (int*) mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+
+    //initialize vars
+    for (int i = 0; i < CHILD_MAX; i++)
+    {
+        searches[i] = 0;
+    }
+
+    //*interruptFlag = 0;
 
 //OTHER SET UP
     char *parsedInput[ARRAY_SIZE];
@@ -71,121 +83,199 @@ int main()
 //LOOP PARENT AND GET USER INPUT, CREATE CHILD WHEN SEARCHING FOR FILE
     while(1) 
     {
-        //print shell
-        printf("A3:findfile$ ");
-        fflush(stdout);
-
-        //get parsed input from user
-        argLen = getInput(parsedInput);
-
-        //determine which command was input
-        if(!strcmp(parsedInput[0], "find")) {
-            //process request based on ammount of arguments
-            if(argLen == 3)
+        //if (!(*printFlag))
+        if (!(print))
+        {
+            //test if 10 children are searching
+            if(freeChild(searches) == -1)
             {
-                //need to keep track of the children
-                //create child to start searching for file
-                //if(fork() == 0) 
+                //if 10 children are searching,
+                //forward until one is free
+                continue;
+            }
+
+            //disable interrupts
+            *interruptFlag = 0;
+
+            //print shell
+            printf("A3:findfile$ ");
+            fflush(stdout);
+
+            //get parsed input from user
+            argLen = getInput(parsedInput);
+
+            //determine which command was input
+            if(!strcmp(parsedInput[0], "find")) {
+                //process request based on ammount of arguments
+                if(argLen == 3)
                 {
-                    //close unused pipes
-                    //close(fileDescriptor[0]);
+                    //need to keep track of the children
+                    //create child to start searching for file
+                    if(fork() == 0) 
+                    {
+                        //close unused pipes
+                        close(fd[0]);
 
-                    if(!strcmp(parsedInput[2], "-f")) {
-                        //search the root directory and subdirectories
-                        //searchDir("~/", parsedInput[1], filePaths[0]);
+                        //find free child
+                        int free = freeChild(searches);
 
-                        //write to pipe fd[1]
-                        //write(fd[1],filePaths[num] ,PATH_MAX);
-                        //interrupt the parent
-                        //kill(parentPID,SIGUSR1);
-                        //close everything and return
-                        //close pipe
-                        //close(fileDescriptor[1]);
-                        //return;
+                        //save child pid
+                        searches[free] = getpid();
 
+                        if(!strcmp(parsedInput[2], "-f")) {
+                            //search the root directory and subdirectories
+                            filePaths[0] = '\0';
+                            searchDir("~/", parsedInput[1], filePaths);
+                            
+
+                            //wait till interrupt flag is high
+                            while(interruptFlag == 0){};
+
+                            //interrupt the parent
+                            kill(parentPID,SIGUSR1);
+                            //write to pipe fd[1]
+                            write(fd[1],filePaths, PATH_SIZE);
+                            //close everything and return
+                            //close pipe
+                            close(fd[1]);
+                            //return;
+                            return 0;
+
+                        }
+                        else if(!strcmp(parsedInput[2], "-s")) {
+                            //search current directory and subdirectories
+                            getcwd(currDir, PATH_SIZE);
+                            filePaths[0] = '\0';
+                            searchDir(currDir, parsedInput[1], filePaths);
+
+                            //wait till interrupt flag is high
+                            while(interruptFlag == 0){};
+                            
+                            //interrupt the parent
+                            kill(parentPID,SIGUSR1);
+                            //write to pipe fd[1]
+                            write(fd[1],filePaths, PATH_SIZE);
+                            //close everything and return
+                            //close pipe
+                            close(fd[1]);
+                            //return;
+                            return 0;
+                            
+                        }
+                        else {
+                            //invalid flag
+                            printf("Invalid flag. Please try again\n");
+                        }
                     }
-                    else if(!strcmp(parsedInput[2], "-s")) {
-                        //search current directory and subdirectories
+                }
+                else if (argLen == 2)
+                {
+                    if(fork() == 0) 
+                    {
+                        //close unused pipes
+                        close(fd[0]);
+
+                        //find free child
+                        int free = freeChild(searches);
+
+                        //save child pid
+                        searches[free] = getpid();
+
+                        //search for file in current directory
                         getcwd(currDir, PATH_SIZE);
-                        searchDir(currDir, parsedInput[1], filePaths);
-
-                        //write to pipe fd[1]
-                        //write(fd[1],filePaths[num] ,PATH_MAX);
+                        filePaths[0] = '\0';
+                        findFile(currDir, parsedInput[1], filePaths);
+                        
+                        //wait till interrupt flag is high
+                        while(interruptFlag == 0){};
+                            
                         //interrupt the parent
-                        //kill(parentPID,SIGUSR1);
+                        kill(parentPID,SIGUSR1);
+                        //write to pipe fd[1]
+                        write(fd[1],filePaths, PATH_SIZE);
                         //close everything and return
                         //close pipe
-                        //close(fileDescriptor[1]);                       
+                        close(fd[1]);
                         //return;
-                        
-                    }
-                    else {
-                        //invalid flag
-                        printf("Invalid flag. Please try again\n");
+                        return 0;
                     }
                 }
-            }
-            else if (argLen == 2)
-            {
-                //if(fork() == 0) 
+                else if (argLen == 1)
                 {
-                    //close unused pipes
-                    //close(fileDescriptor[0]);
-
-                    //search for file in current directory
-                    getcwd(currDir, PATH_SIZE);
-                    findFile(currDir, parsedInput[1], filePaths);
-                    
-                    //write to pipe fd[1]
-                    //write(fd[1],filePaths[num] ,PATH_MAX);
-                    //interrupt the parent
-                    //kill(parentPID,SIGUSR1);
-                    //close everything and return
-                    //close pipe
-                    //close(fileDescriptor[1]);                    
-                    //return;
+                    printf("Not enough aruments. Please provide filename."
+                        "\nPlease try again.\n");
                 }
+                else
+                {
+                    printf("Too many aruments.\nPlease try again.\n");
+                }
+
             }
-            else if (argLen == 1)
+            else if((!strcmp(parsedInput[0], "quit")) || (!strcmp(parsedInput[0], "q"))) 
             {
-                printf("Not enough aruments. Please provide filename."
-                       "\nPlease try again.\n");
+                //notify start of quit
+                printf("Quitting...\n");
+
+                //kill the children and stop their processes
+                //for i < CHILD MAX, kill children
+                //wait for the children
+                //for i < CHILD MAX, wait();
+
+                //print complete message and exit
+                printf("Done.\nExiting...\n");
+
+                //break out of loop and finish program
+                break;
             }
-            else
+            else 
             {
-                printf("Too many aruments.\nPlease try again.\n");
+                //invalid command
+                printf("Invalid command. Please try again\n");
             }
 
+            //enable interrupts
+            *interruptFlag = 1;
         }
-        else if((!strcmp(parsedInput[0], "quit")) || (!strcmp(parsedInput[0], "q"))) 
+        else
         {
-            //notify start of quit
-            printf("Quitting...\n");
+            char text[1000];
+            //read from pipe and print out results
+            read(STDIN_FILENO, text, PATH_SIZE);
 
-            //kill the children and stop their processes
-            //for i < CHILD MAX, kill children
-            //wait for the children
-            //for i < CHILD MAX, wait();
+            //print found paths
+            printf("%s",text);
 
-            //print complete message and exit
-            printf("Done.\nExiting...\n");
+            //reset print flag
+            print = 0;
 
-            //break out of loop and finish program
-            break;
+            //do this till print stays zero?
+
+            //restore parent
+            dup2(restore_stdin,STDIN_FILENO);
         }
-        else 
-        {
-            //invalid command
-            printf("Invalid command. Please try again\n");
-        }
+
+
 
         //wait for the finshed children and take off list
-        //for i < child max, if pid valid, wait no hang
-        //waitpid()
+        int status;
+        for(int i = 0; i < CHILD_MAX; i++)
+        {
+            if (searches[i] != 0)
+            {
+                int endId = waitpid(searches[i], &status, WNOHANG);
+                if(endId != 0)
+                {
+                    searches[i] = 0;
+                }
+            }
+        }
     }
 
 //QUIT CONDITION REACHED, CLEAN UP AND EXIT
+    close[fd[0]];
+    close[fd[1]];
     munmap(searches,sizeof(int)*CHILD_MAX);
+    munmap(interruptFlag,sizeof(int));
 
     return 0;
 }
@@ -264,7 +354,7 @@ void findFile(char* cwd, char *searchName, char* fileFoundPath)
             strcat(fileFoundPath, cwd);
             strcat(fileFoundPath, "/");
             strcat(fileFoundPath, temp);
-            strcat(fileFoundPath, "\n");
+            strcat(fileFoundPath, "\n\0");
         }
 
         // read next entry in directory
@@ -315,6 +405,22 @@ void searchDir(char* cwd, char *searchName, char* fileFoundPath)
     }
 
     closedir(directory);
+}
+
+int freeChild(int *kidsPIDs)
+{
+    int freeIndex = -1;
+
+    for(int i = 0; i < CHILD_MAX; i++)
+    {
+        if(kidsPIDs[i] == 0)
+        {
+            freeIndex = i;
+            break;
+        }
+    }
+
+    return freeIndex;
 }
 
 void signalHandler(int i)

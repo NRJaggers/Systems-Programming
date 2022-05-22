@@ -27,15 +27,12 @@ using namespace std;
 
 int main(){
 
-int fd = shm_open("namedSharedMem", O_RDWR, 0777);
-int *p = (int*) mmap(NULL, 100*sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    char test1[100] = "hello there \n\0";
+    char test2[] = "hey, whats up?\0";
 
-cout << p[0];
+    strcat(test1, test2);
 
-//clean up
-close(fd);
-unlink("namedSharedMem");
-munmap(p,100*sizeof(int));
+    printf("%s",test1);
 
     return 0;
 }
