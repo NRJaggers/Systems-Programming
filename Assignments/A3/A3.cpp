@@ -12,6 +12,8 @@ DESCRIPTION - This program ...
 #include <unistd.h>
 #include <string.h>
 #include <dirent.h>
+#include <signal.h>
+#include <sys/mman.h>
 
 
 using namespace std;
@@ -25,7 +27,10 @@ using namespace std;
 #define INPUT_SIZE 100
 #define PATH_SIZE 1000
 #define CHILD_MAX 10
+
 //global variables
+int fd[2];
+char print = 0;
 
 //function prototypes
 void welcome();
@@ -33,6 +38,7 @@ int getInput(char**);
 int getArgLen(char**);
 void findFile(char*, char*, char*);
 void searchDir(char*, char*, char*);
+void signalHandler(int i);
 
 
 int main()
@@ -41,10 +47,21 @@ int main()
     welcome();
 
 //SET UP FOR COMMUNICATION BETWEEN PARENT AND CHILD
-    //set up pipes and memory and whatever
+    //save standard input file descriptor
+    int restore_stdin = dup(STDIN_FILENO);
+    
+    //set up signals
+    signal(SIGUSR1, signalHandler); // to handle change from standard input to child input
+    int parentPID = getpid(); //pid to send signal to parent
 
-//OTHER SET UP?
-    //other stuff? like char arrays or whatever for input?
+    //setup pipe
+    pipe(fd); // fd[0] and fd[1]
+
+    //set up shared variables
+    //holds pids of children that are searching
+    int *searches = (int*) mmap(NULL, sizeof(int)*CHILD_MAX, PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, -1, 0);
+
+//OTHER SET UP
     char *parsedInput[ARRAY_SIZE];
     char  currDir[PATH_SIZE];
     char  *filePaths[CHILD_MAX];
@@ -66,18 +83,25 @@ int main()
             //process request based on ammount of arguments
             if(argLen == 3)
             {
-                // need to keep track of the children
+                //need to keep track of the children
                 //create child to start searching for file
                 //if(fork() == 0) 
                 {
+                    //close unused pipes
+                    //close(fileDescriptor[0]);
 
                     if(!strcmp(parsedInput[2], "-f")) {
                         //search the root directory and subdirectories
-                        searchDir("/", parsedInput[1], filePaths[0]);
+                        //searchDir("~/", parsedInput[1], filePaths[0]);
 
                         //write to pipe fd[1]
+                        //write(fd[1],filePaths[num] ,PATH_MAX);
                         //interrupt the parent
+                        //kill(parentPID,SIGUSR1);
                         //close everything and return
+                        //close pipe
+                        //close(fileDescriptor[1]);
+                        //return;
 
                     }
                     else if(!strcmp(parsedInput[2], "-s")) {
@@ -86,8 +110,13 @@ int main()
                         searchDir(currDir, parsedInput[1], filePaths[0]);
 
                         //write to pipe fd[1]
+                        //write(fd[1],filePaths[num] ,PATH_MAX);
                         //interrupt the parent
+                        //kill(parentPID,SIGUSR1);
                         //close everything and return
+                        //close pipe
+                        //close(fileDescriptor[1]);                       
+                        //return;
                         
                     }
                     else {
@@ -100,14 +129,21 @@ int main()
             {
                 //if(fork() == 0) 
                 {
+                    //close unused pipes
+                    //close(fileDescriptor[0]);
+
                     //search for file in current directory
                     getcwd(currDir, PATH_SIZE);
-                    //filePaths[0] = 
                     findFile(currDir, parsedInput[1], filePaths[0]);
                     
                     //write to pipe fd[1]
+                    //write(fd[1],filePaths[num] ,PATH_MAX);
                     //interrupt the parent
+                    //kill(parentPID,SIGUSR1);
                     //close everything and return
+                    //close pipe
+                    //close(fileDescriptor[1]);                    
+                    //return;
                 }
             }
             else if (argLen == 1)
@@ -127,7 +163,9 @@ int main()
             printf("Quitting...\n");
 
             //kill the children and stop their processes
+            //for i < CHILD MAX, kill children
             //wait for the children
+            //for i < CHILD MAX, wait();
 
             //print complete message and exit
             printf("Done.\nExiting...\n");
@@ -142,9 +180,12 @@ int main()
         }
 
         //wait for the finshed children and take off list
+        //for i < child max, if pid valid, wait no hang
+        //waitpid()
     }
 
 //QUIT CONDITION REACHED, CLEAN UP AND EXIT
+    munmap(searches,sizeof(int)*CHILD_MAX);
 
     return 0;
 }
@@ -248,4 +289,11 @@ void searchDir(char* cwd, char *searchName, char* fileFoundPath)
     }
 
     closedir(directory);
+}
+
+void signalHandler(int i)
+{
+    dup2(fd[0], STDIN_FILENO);
+    print = 1;
+    return;
 }
