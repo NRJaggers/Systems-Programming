@@ -26,7 +26,8 @@ int main()
     cout << cwd << endl;
 
     //open cwd
-    DIR *directory = opendir(cwd);
+    //DIR *directory = opendir(cwd);
+    DIR *directory = opendir("/");
 
     // create a structure to hold an entry in the directory
     // note: the dirent structure is defined in dirent.h

@@ -32,6 +32,7 @@ using namespace std;
 //global variables
 int fd[2];
 char print = 0;
+char tempSave[PATH_SIZE] = {0};
 
 //function prototypes
 void welcome();
@@ -91,6 +92,8 @@ int main()
             {
                 //if 10 children are searching,
                 //forward until one is free
+                printf("\nChild Limit Reached. Waiting for Free Child.\n");
+                sleep(3);
                 continue;
             }
 
@@ -125,8 +128,18 @@ int main()
                         if(!strcmp(parsedInput[2], "-f")) {
                             //search the root directory and subdirectories
                             filePaths[0] = '\0';
-                            searchDir("~/", parsedInput[1], filePaths);
+                            char rootDir[] = "/";
+                            char stringHold[PATH_SIZE];
+                            strcpy(stringHold,parsedInput[1]);
+                            searchDir(rootDir, parsedInput[1], filePaths);
                             
+                            //if nothing found, return message
+                            if (filePaths[0] == '\0')
+                            {
+                                strcat(filePaths, "/");
+                                strcat(filePaths, stringHold);
+                                strcat(filePaths, " file was not found\n");
+                            }
 
                             //wait till interrupt flag is high
                             while(interruptFlag == 0){};
@@ -146,7 +159,17 @@ int main()
                             //search current directory and subdirectories
                             getcwd(currDir, PATH_SIZE);
                             filePaths[0] = '\0';
+                            char stringHold[PATH_SIZE];
+                            strcpy(stringHold,parsedInput[1]);
                             searchDir(currDir, parsedInput[1], filePaths);
+
+                            //if nothing found, return message
+                            if (filePaths[0] == '\0')
+                            {
+                                strcat(filePaths, "/");
+                                strcat(filePaths, stringHold);
+                                strcat(filePaths, " file was not found\n");
+                            }
 
                             //wait till interrupt flag is high
                             while(interruptFlag == 0){};
@@ -184,8 +207,18 @@ int main()
                         //search for file in current directory
                         getcwd(currDir, PATH_SIZE);
                         filePaths[0] = '\0';
+                        char stringHold[PATH_SIZE];
+                        strcpy(stringHold,parsedInput[1]);
                         findFile(currDir, parsedInput[1], filePaths);
                         
+                        //if nothing found, return message
+                        if (filePaths[0] == '\0')
+                        {
+                            strcat(filePaths, "/");
+                            strcat(filePaths, stringHold);
+                            strcat(filePaths, " file was not found\n");
+                        }
+
                         //wait till interrupt flag is high
                         while(interruptFlag == 0){};
                             
@@ -218,8 +251,22 @@ int main()
 
                 //kill the children and stop their processes
                 //for i < CHILD MAX, kill children
+                for(int i = 0; i < CHILD_MAX; i++)
+                {
+                    if (searches[i] != 0)
+                    {
+                        kill(searches[i],SIGKILL);
+                    }
+                }
                 //wait for the children
-                //for i < CHILD MAX, wait();
+                int status;
+                for(int i = 0; i < CHILD_MAX; i++)
+                {
+                    if (searches[i] != 0)
+                    {
+                        int endId = waitpid(searches[i], &status, WNOHANG);
+                    }
+                }
 
                 //print complete message and exit
                 printf("Done.\nExiting...\n");
@@ -229,8 +276,12 @@ int main()
             }
             else 
             {
-                //invalid command
-                printf("Invalid command. Please try again\n");
+                if (strcmp(tempSave,"\0") == 0)
+                {
+                    //invalid command
+                    printf("Invalid command. Please try again\n");
+                }
+
             }
 
             //enable interrupts
@@ -239,8 +290,15 @@ int main()
         else
         {
             char text[1000];
-            //read from pipe and print out results
-            read(STDIN_FILENO, text, PATH_SIZE);
+            if (strcmp(tempSave,"\0") == 0)
+            {
+                //read from pipe and print out results
+                read(STDIN_FILENO, text, PATH_SIZE);
+            }
+            else
+            {
+                strcpy(text, tempSave);
+            }
 
             //print found paths
             printf("%s",text);
@@ -250,8 +308,13 @@ int main()
 
             //do this till print stays zero?
 
+            //reset temp save
+            strcpy(tempSave,"\0");
+
             //restore parent
             dup2(restore_stdin,STDIN_FILENO);
+
+
         }
 
 
@@ -272,8 +335,8 @@ int main()
     }
 
 //QUIT CONDITION REACHED, CLEAN UP AND EXIT
-    close[fd[0]];
-    close[fd[1]];
+    close(fd[0]);
+    close(fd[1]);
     munmap(searches,sizeof(int)*CHILD_MAX);
     munmap(interruptFlag,sizeof(int));
 
@@ -294,9 +357,17 @@ int getInput(char *arg_tokens[ARRAY_SIZE])
      */
 
     //read in input from user
-    char input[INPUT_SIZE];
-    int bytesRead = read(STDIN_FILENO, input, INPUT_SIZE);
+    char input[PATH_SIZE];
+    int bytesRead = read(STDIN_FILENO, input, PATH_SIZE);
     input[bytesRead-1] = '\0';
+
+    if (input[0] == '/')
+        {
+            strcpy(tempSave,input);
+            strcpy(arg_tokens[0],"\0");
+            //arg_tokens[0] = "\0";
+            return 0;
+        }
 
     //break up input and return tokens
     int num_args = 0; //num of arguments entered
@@ -331,8 +402,8 @@ int getArgLen(char **arg_tokens)
 void findFile(char* cwd, char *searchName, char* fileFoundPath)
 {
     //define variables to help traverse files in directory and return result
-    DIR *directory;
-    dirent *entry;
+    DIR *directory = NULL;
+    dirent *entry = NULL;
     //getting weird behavior with searchName. Saving data to temp.
     char temp[100];
     strcpy(temp,searchName);
@@ -341,7 +412,8 @@ void findFile(char* cwd, char *searchName, char* fileFoundPath)
     directory = opendir(cwd);
 
     //read first dir from directory (cwd)
-    entry = readdir(directory);
+    if(directory != NULL)
+        entry = readdir(directory);
 
     //while entry is not null continue searching directory
     while(entry) 
@@ -377,7 +449,9 @@ void searchDir(char* cwd, char *searchName, char* fileFoundPath)
     //search other directories
     //define variables to help traverse files in directory
     DIR *directory = opendir(cwd);
-    dirent *entry= readdir(directory);
+    dirent *entry = NULL;
+    if(directory != NULL)
+        entry = readdir(directory);
 
     while(entry) {
         //is the entry a directory? recursion to traverse directories!
