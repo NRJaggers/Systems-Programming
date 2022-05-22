@@ -88,7 +88,7 @@ char* findFile(char* cwd, char* filename, char* retVal) {
 
     DIR *dir = opendir(cwd);
     struct dirent *entry;
-fi
+
     while((entry = readdir(dir) )!= NULL) {
         //for each entry check:
         // 1. does the entry name match filename?
@@ -97,7 +97,7 @@ fi
         }
 
         // 2. is the entry a directory? recursion!
-        if(entry -> d_type == DT_DIR)) {
+        if(entry -> d_type == DT_DIR) {
             char newcwd[1000];
             // strcat newcwd, cwd
             // strcat newcwd/<entry_name>

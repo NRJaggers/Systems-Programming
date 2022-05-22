@@ -8,6 +8,7 @@ DATE - 05/17/22
 DESCRIPTION - This program ...
 *******************************************************/
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <dirent.h>
@@ -23,27 +24,31 @@ using namespace std;
 #define ARRAY_SIZE 5
 #define INPUT_SIZE 100
 #define PATH_SIZE 1000
+#define CHILD_MAX 10
 //global variables
 
 //function prototypes
 void welcome();
 int getInput(char**);
 int getArgLen(char**);
-char* findFile(char*, char*);
-char* searchDir(char*, char*);
+void findFile(char*, char*, char*);
+void searchDir(char*, char*, char*);
 
 
 int main()
 {
 //WELCOME MESSAGE
     welcome();
+
 //SET UP FOR COMMUNICATION BETWEEN PARENT AND CHILD
     //set up pipes and memory and whatever
 
 //OTHER SET UP?
     //other stuff? like char arrays or whatever for input?
     char *parsedInput[ARRAY_SIZE];
-    char* result, currDir[PATH_SIZE]; 
+    char  currDir[PATH_SIZE];
+    char  *filePaths[CHILD_MAX];
+    int   searchTask[CHILD_MAX] = {0};
     int argLen; 
 
 //LOOP PARENT AND GET USER INPUT, CREATE CHILD WHEN SEARCHING FOR FILE
@@ -68,7 +73,7 @@ int main()
 
                     if(!strcmp(parsedInput[2], "-f")) {
                         //search the root directory and subdirectories
-                        result = searchDir("/", parsedInput[1]);
+                        searchDir("/", parsedInput[1], filePaths[0]);
 
                         //write to pipe fd[1]
                         //interrupt the parent
@@ -78,7 +83,7 @@ int main()
                     else if(!strcmp(parsedInput[2], "-s")) {
                         //search current directory and subdirectories
                         getcwd(currDir, PATH_SIZE);
-                        result = searchDir(currDir, parsedInput[1]);
+                        searchDir(currDir, parsedInput[1], filePaths[0]);
 
                         //write to pipe fd[1]
                         //interrupt the parent
@@ -97,8 +102,9 @@ int main()
                 {
                     //search for file in current directory
                     getcwd(currDir, PATH_SIZE);
-                    result = findFile(currDir,parsedInput[2]);
-
+                    //filePaths[0] = 
+                    findFile(currDir, parsedInput[1], filePaths[0]);
+                    
                     //write to pipe fd[1]
                     //interrupt the parent
                     //close everything and return
@@ -187,12 +193,59 @@ int getArgLen(char **arg_tokens)
     return i;
 }
 
-char* findFile(char*, char*)
+void findFile(char* cwd, char *searchName, char* fileFoundPath)
 {
+    //define variables to help traverse files in directory and return result
+    DIR *directory;
+    dirent *entry;
+
+    //open current directory
+    directory = opendir(cwd);
+
+    //read first dir from directory (cwd)
+    entry = readdir(directory);
+
+    //while entry is not null continue searching directory
+    while(entry) 
+    {
+        //printf("%s %s",entry->d_name, searchName);
+        //fflush(stdout);
+
+        if (!strcmp(entry->d_name, searchName))
+        {
+            strcat(fileFoundPath, cwd);
+            strcat(fileFoundPath, "/");
+            strcat(fileFoundPath,searchName);
+            strcat(fileFoundPath, "\n");
+        }
+
+        // read next entry in directory
+        entry = readdir(directory);
+    }
+
+    closedir(directory);
 
 }
 
-char* searchDir(char*, char*)
+void searchDir(char* cwd, char *searchName, char* fileFoundPath)
 {
+    //search current directory
+    findFile(cwd, searchName, fileFoundPath);
 
+    //search other directories
+    //define variables to help traverse files in directory
+    DIR *directory = opendir(cwd);
+    dirent *entry= readdir(directory);
+
+    while(entry) {
+        //is the entry a directory? recursion to traverse directories!
+        if(entry -> d_type == DT_DIR) {
+            char newcwd[PATH_MAX];
+            strcat(newcwd, cwd);
+            strcat(newcwd, entry -> d_name); 
+            searchDir(newcwd, searchName, fileFoundPath);
+        }
+    }
+
+    closedir(directory);
 }
