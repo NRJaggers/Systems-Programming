@@ -2,7 +2,8 @@
 PROGRAM NAME - Assignment - Find File
 PROGRAMMER - Nathan Jaggers
 DATE - 05/17/22
-DESCRIPTION - This program ...
+DESCRIPTION - This program searches for files asked for
+              by the user.
 *******************************************************/
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,15 +17,11 @@ DESCRIPTION - This program ...
 
 using namespace std;
 
-//write description
-//write psuedo code
-//make array to hold PIDs of children. defualt value 0? make shared mem? so all can access?
-
 //defines
 #define ARRAY_SIZE 5
 #define INPUT_SIZE 100
 #define PATH_SIZE 1000
-#define CHILD_MAX 1
+#define CHILD_MAX 10
 
 //global variables
 int fd[2];
