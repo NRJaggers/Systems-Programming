@@ -1,10 +1,7 @@
 /*******************************************************
 PROGRAM NAME - Assignment - Find File
-
 PROGRAMMER - Nathan Jaggers
-
 DATE - 05/17/22
-
 DESCRIPTION - This program ...
 *******************************************************/
 #include <stdio.h>
@@ -27,7 +24,7 @@ using namespace std;
 #define ARRAY_SIZE 5
 #define INPUT_SIZE 100
 #define PATH_SIZE 1000
-#define CHILD_MAX 10
+#define CHILD_MAX 1
 
 //global variables
 int fd[2];
@@ -84,19 +81,16 @@ int main()
 //LOOP PARENT AND GET USER INPUT, CREATE CHILD WHEN SEARCHING FOR FILE
     while(1) 
     {
-        //if (!(*printFlag))
-        if (!(print))
+        //test if 10 children are searching
+        if(freeChild(searches) == -1)
         {
-            //test if 10 children are searching
-            if(freeChild(searches) == -1)
-            {
-                //if 10 children are searching,
-                //forward until one is free
-                printf("\nChild Limit Reached. Waiting for Free Child.\n");
-                sleep(3);
-                continue;
-            }
-
+            //if 10 children are searching,
+            //forward until one is free
+            printf("\nChild Limit Reached. Waiting for Free Child.\n");
+            sleep(3);
+        }
+        else if (!(print))
+        {
             //disable interrupts
             *interruptFlag = 0;
 
