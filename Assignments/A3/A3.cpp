@@ -1,5 +1,5 @@
 /*******************************************************
-PROGRAM NAME - Assignment - Find File
+PROGRAM NAME - Assignment 3 - Find File
 PROGRAMMER - Nathan Jaggers
 DATE - 05/17/22
 DESCRIPTION - This program searches for files asked for
