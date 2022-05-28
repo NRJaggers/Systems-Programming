@@ -33,9 +33,6 @@ int execve(const char *filename, char *const argv[]);
 
 using namespace std;
 
-//clean up and comment this code better
-//work on main program code
-
 int main(int argc, char *argv[]){
 
     /** 

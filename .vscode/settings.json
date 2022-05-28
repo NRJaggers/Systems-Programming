@@ -11,6 +11,7 @@
         "iostream": "cpp",
         "cstring": "cpp",
         "typeinfo": "cpp",
-        "fstream": "cpp"
+        "fstream": "cpp",
+        "random": "cpp"
     }
 }
