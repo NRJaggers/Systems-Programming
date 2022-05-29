@@ -9,7 +9,7 @@
         "type": "cppdbg",
         "request": "launch",
         "program": "${fileDirname}/${fileBasenameNoExtension}",
-        "args": ["input_images/jar.bmp","input_images/flowers.bmp","0.5","output_images/test.bmp"],
+        "args": ["Assignments/A4/A4","1"],
         "stopAtEntry": false,
         "cwd": "${workspaceFolder}",
         "environment": [],

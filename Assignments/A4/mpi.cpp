@@ -30,6 +30,7 @@ int execve(const char *filename, char *const argv[]);
 #include <iostream>
 #include <unistd.h>
 #include <wait.h>
+#include <string.h>
 
 using namespace std;
 
@@ -55,8 +56,8 @@ int main(int argc, char *argv[]){
 
 
     //grab input from terminal and pass into arguments array
-    sprintf(arguments[0], argv[1]); // "calcmatrix" don't need ./ because it's the arguments
-    sprintf(arguments[1], argv[2]); 
+    strcpy(arguments[0], argv[1]); // "calcmatrix" don't need ./ because it's the arguments
+    strcpy(arguments[1], argv[2]); 
 
     //convert max number of instances to number for looping purposes
     int n = atoi(argv[2]);
@@ -65,8 +66,9 @@ int main(int argc, char *argv[]){
     int *children = new int[n];
 
     //format first argument for execv, should have form of "./calcmatrix"
-    char exe[100];
-    sprintf(exe, "./s", argv[1]);
+    char exe[100] = {0};
+    strcat(exe, "./");
+    strcat(exe, arguments[0]);
 
     //loop through to run multiple instances of calcmatrix program 
     for (int i = 0; i < n; i ++)
@@ -88,7 +90,7 @@ int main(int argc, char *argv[]){
     }
 
     //wait for all children to finish
-    int allDone, status, endId;
+    int allDone = 0, status, endId;
     while(allDone == 0)
     {
         //set flag to true and flip if all processes havent finished

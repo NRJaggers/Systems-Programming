@@ -9,6 +9,8 @@ DESCRIPTION - This program performs matrix multiplication. This program is
               Program 1 and will be called by Program 2, which is an MPI.
               Program 2 calls program 1 several times. Program 1 should share
               the work with its copies over shared memory.
+
+COMPILE - Don't forget to link with -lrt flag at compile
 *******************************************************/
 
 // includes
@@ -18,6 +20,7 @@ DESCRIPTION - This program performs matrix multiplication. This program is
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <time.h>
 
 // defines
 #define MATRIX_DIMENSION_XY 10
@@ -32,6 +35,11 @@ void synch(int, int, int *, int);
 
 int main(int argc, char *argv[])
 {
+    //initialize random
+    time_t t;
+    srand((unsigned) time(&t));
+
+    //initialize varibales
     int par_id = 0;    // the parallel ID of this process
     int par_count = 1; // the amount of processes
     float *A, *B, *C;  // matrices A,B and C
@@ -118,6 +126,7 @@ int main(int argc, char *argv[])
     //synch all processes to this point
     synch(par_id, par_count, ready, 1);
 
+    int randNum;
     if (par_id == 0)
     {
         //initialize the matrices A and B
@@ -125,8 +134,9 @@ int main(int argc, char *argv[])
         {
             for(int cols = 0; cols < MATRIX_DIMENSION_XY; cols++)
             {
-                set_matrix_elem(A, rows, cols, 2);
-                set_matrix_elem(B, rows, cols, 2);
+                randNum = (rand()%10);
+                set_matrix_elem(A, rows, cols, randNum);
+                set_matrix_elem(B, rows, cols, randNum);
             }
         }
     }
@@ -154,6 +164,7 @@ int main(int argc, char *argv[])
     else
         printf("buuug!\n");
 
+    //close and clean up
     close(fd[0]);
     close(fd[1]);
     close(fd[2]);
@@ -162,6 +173,10 @@ int main(int argc, char *argv[])
     shm_unlink("matrixB");
     shm_unlink("matrixC");
     shm_unlink("synchobject");
+    munmap(A,MATRIX_DIMENSION_XY*MATRIX_DIMENSION_XY*sizeof(float));
+    munmap(B,MATRIX_DIMENSION_XY*MATRIX_DIMENSION_XY*sizeof(float));
+    munmap(C,MATRIX_DIMENSION_XY*MATRIX_DIMENSION_XY*sizeof(float));
+    munmap(ready,par_count*sizeof(int));
 
     return 0;
 }
