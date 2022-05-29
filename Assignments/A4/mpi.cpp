@@ -49,15 +49,15 @@ int main(int argc, char *argv[]){
     //allocate variables to pass to execv
     char *arguments[4];
     arguments[0] = new char[100]; //name of program to be executed
-    arguments[1] = new char[100]; //number of instances to run
-    arguments[2] = new char[100]; //number of current instance
+    arguments[1] = new char[100]; //number of current instance
+    arguments[2] = new char[100]; //number of instances to run
     arguments[3] = NULL;          //null to terminate array
 
 
 
     //grab input from terminal and pass into arguments array
     strcpy(arguments[0], argv[1]); // "calcmatrix" don't need ./ because it's the arguments
-    strcpy(arguments[1], argv[2]); 
+    strcpy(arguments[2], argv[2]); 
 
     //convert max number of instances to number for looping purposes
     int n = atoi(argv[2]);
@@ -74,7 +74,7 @@ int main(int argc, char *argv[]){
     for (int i = 0; i < n; i ++)
     {
         //format current instance and place in arguments array
-        sprintf(arguments[2], "%d", i);
+        sprintf(arguments[1], "%d", i);
 
         //fork because execv kills calling process on success
         children[i] = fork(); //parent saves pids of children

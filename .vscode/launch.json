@@ -9,7 +9,7 @@
         "type": "cppdbg",
         "request": "launch",
         "program": "${fileDirname}/${fileBasenameNoExtension}",
-        "args": ["Assignments/A4/A4","1"],
+        "args": ["Assignments/A4/A4","2"],
         "stopAtEntry": false,
         "cwd": "${workspaceFolder}",
         "environment": [],
