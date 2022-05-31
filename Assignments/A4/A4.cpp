@@ -238,7 +238,7 @@ void quadratic_matrix_multiplication(float *A, float *B, float *C)
     // nullify the result matrix first
     for (int a = 0; a < MATRIX_DIMENSION_XY; a++)
         for (int b = start; b < stop; b++)
-            C[a + start * MATRIX_DIMENSION_XY] = 0.0;
+            C[a + b * MATRIX_DIMENSION_XY] = 0.0;
     // multiply
     for (int a = 0; a < MATRIX_DIMENSION_XY; a++)         // over all cols a
         for (int b = start; b < stop; b++)                // over all rows b
