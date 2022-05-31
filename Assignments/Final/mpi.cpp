@@ -1,28 +1,12 @@
 /*******************************************************
-PROGRAM NAME - Assignment 4 - Message Passing Interface
+PROGRAM NAME - Final - Message Passing Interface for BMPs
 
 PROGRAMMER - Nathan Jaggers
 
-DATE - 05/24/22
+DATE - 05/31/22
 
-DESCRIPTION - This program calls the matrix multiply function
+DESCRIPTION - This program calls the matrix multiply for BMP function
               multiple times
-
-message parsing interface
->./mpi calcmatrix 4
-
->calcmatric 4 0
->calcmatric 4 1
->calcmatric 4 2
->calcmatric 4 3
-
-execv("./")
-
-execv() - The exec() family of functions replaces the current process image with a new process image.
-          The first argument, by convention, should point to the filename associated with the file being executed. 
-          The array of pointers must be terminated by a NULL pointer.
-          
-int execve(const char *filename, char *const argv[]);
 *******************************************************/
 
 #include <iostream>
@@ -38,10 +22,6 @@ int main(int argc, char *argv[]){
      * argv[0] - //name of this program
      * argv[1] - //name of program to be executed
      * argv[2] - //number of instances to run
-     * 
-     * for this program, "calcmatrix" will refer to the 
-     * program we are interested in running multiple 
-     * instances of.
      */
 
     //allocate variables to pass to execv
@@ -54,7 +34,7 @@ int main(int argc, char *argv[]){
 
 
     //grab input from terminal and pass into arguments array
-    strcpy(arguments[0], argv[1]); // "calcmatrix" don't need ./ because it's the arguments
+    strcpy(arguments[0], argv[1]);
     strcpy(arguments[2], argv[2]); 
 
     //convert max number of instances to number for looping purposes
@@ -63,12 +43,12 @@ int main(int argc, char *argv[]){
     //allocate array to hold pids of children
     int *children = new int[n];
 
-    //format first argument for execv, should have form of "./calcmatrix"
+    //format first argument for execv
     char exe[100] = {0};
     strcat(exe, "./");
     strcat(exe, arguments[0]);
 
-    //loop through to run multiple instances of calcmatrix program 
+    //loop through to run multiple instances of program 
     for (int i = 0; i < n; i ++)
     {
         //format current instance and place in arguments array
