@@ -21,6 +21,7 @@ COMPILE - Don't forget to link with -lrt flag at compile
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/time.h>
 
 // defines
 #define MATRIX_DIMENSION_XY 10
@@ -75,21 +76,19 @@ void quadratic_matrix_multiplication_parallel_images(int, int, BMP, BMP, BMP);
 void synch(int, int, int *, int);
 void readHeaders(BMFH &, BMIH &, FILE *);
 void writeHeaders(BMFH &, BMIH &, FILE *);
-BMP readImageInfo(FILE*);
+BMP readImageInfo(FILE *);
 void writeImage(BMP, char *);
-BMP blendImages(BMP &, BMP &, float);
-float interpolate_color(BMP, float, float, int);
-float get_color(BMP, int, int, int);
 
 int main(int argc, char *argv[])
 {
     // initialize varibales
-    int par_id = 0;    // the parallel ID of this process
-    int par_count = 1; // the amount of processes
-    float *A, *B, *C;  // matrices A,B and C
-    int *ready;        // needed for synch
-    int fd[4];         // file descriptor for shared memory
-    BMP image1, image2, image3;
+    int par_id = 0;             // the parallel ID of this process
+    int par_count = 1;          // the amount of processes
+    float *A, *B, *C;           // matrices A,B and C
+    int *ready;                 // needed for synch
+    int fd[4];                  // file descriptor for shared memory
+    timeval start, end;         // timer for calculations
+    BMP image1, image2, image3; // vars to store image data
 
     // check if proper ammount of arguments called for program parallel processing
     if (argc != 3)
@@ -111,8 +110,8 @@ int main(int argc, char *argv[])
     }
 
     // read in image meta data here? use metadata to declare sizes of allocated memory down the line
-    FILE *file1 = fopen("input_images/f1.bmp", "rb");
-    FILE *file2 = fopen("input_images/f2.bmp", "rb");
+    FILE *file1 = fopen("f1.bmp", "rb");
+    FILE *file2 = fopen("f2.bmp", "rb");
 
     image1 = readImageInfo(file1);
     image2 = readImageInfo(file2);
@@ -191,17 +190,26 @@ int main(int argc, char *argv[])
     // synch all processes to this point
     synch(par_id, par_count, ready, 2);
 
+    // start timer for calculations 
+    gettimeofday(&start,NULL);
+
     // perform this instances portion of matrix multiplication
     quadratic_matrix_multiplication_parallel_images(par_id, par_count, image1, image2, image3);
 
     // synch all processes to this point
     synch(par_id, par_count, ready, 3);
+    
+    // end timer for calculations 
+    gettimeofday(&end,NULL);
 
     // take results and write to output file
     if (par_id == 0)
     {
         // write out data from image
-        writeImage(image3,"output_images/outFinal.bmp");
+        char outFile[] = "result.bmp";
+        writeImage(image3, outFile);
+        printf("\nduration: %f usec\n", (double)(1000000 * (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec)));
+
     }
 
     // close and clean up
@@ -296,21 +304,22 @@ void quadratic_matrix_multiplication_parallel_images(int id, int count, BMP imag
     int stop = (((float)id + 1) / count) * imageA.infoHeader.biHeight;
     int start = (((float)id) / count) * imageA.infoHeader.biHeight;
 
-    //check for padding on width of pixels
-    int widthBytes = imageA.infoHeader.biWidth * 3; //pixels*(Byte/pixels)
-    if(widthBytes %4 != 0)
+    // check for padding on width of pixels
+    int widthBytes = imageA.infoHeader.biWidth * 3; // pixels*(Byte/pixels)
+    if (widthBytes % 4 != 0)
     {
-        widthBytes += (4-(widthBytes%4));
+        widthBytes += (4 - (widthBytes % 4));
     }
 
     int offsetA = 0, offsetB = 0, offsetC = 0;
-    float rA, gA, bA, rB, gB, bB, rC, gC, bC;; 
+    float rA, gA, bA, rB, gB, bB, rC, gC, bC;
+    ;
 
     // nullify the result matrix first
-    for (int a = 0; a < imageC.infoHeader.biWidth; a++) //controls cols
-        for (int b = start; b < stop; b++) //controls rows
+    for (int a = 0; a < imageC.infoHeader.biWidth; a++) // controls cols
+        for (int b = start; b < stop; b++)              // controls rows
         {
-            offsetC = a*3 + b * widthBytes;
+            offsetC = a * 3 + b * widthBytes;
             imageC.imageData[offsetC + BLUE] = (BYTE)0.0;
             imageC.imageData[offsetC + GREEN] = (BYTE)0.0;
             imageC.imageData[offsetC + RED] = (BYTE)0.0;
@@ -321,23 +330,23 @@ void quadratic_matrix_multiplication_parallel_images(int id, int count, BMP imag
         for (int b = start; b < stop; b++)                      // over all rows b
             for (int c = 0; c < imageC.infoHeader.biWidth; c++) // over all rows/cols left
             {
-                //determine offsets
-                offsetA = c*3 + b * widthBytes;
-                offsetB = a*3 + c * widthBytes;
-                offsetC = a*3 + b * widthBytes;
+                // determine offsets
+                offsetA = c * 3 + b * widthBytes;
+                offsetB = a * 3 + c * widthBytes;
+                offsetC = a * 3 + b * widthBytes;
 
-                //get image values for colors and normalize
-                bA = ((float)imageA.imageData[offsetA + BLUE])/255;
-                gA = ((float)imageA.imageData[offsetA + GREEN])/255;
-                rA = ((float)imageA.imageData[offsetA + RED])/255;
+                // get image values for colors and normalize
+                bA = ((float)imageA.imageData[offsetA + BLUE]) / 255;
+                gA = ((float)imageA.imageData[offsetA + GREEN]) / 255;
+                rA = ((float)imageA.imageData[offsetA + RED]) / 255;
 
-                bB = ((float)imageB.imageData[offsetB + BLUE])/255;
-                gB = ((float)imageB.imageData[offsetB + GREEN])/255;
-                rB = ((float)imageB.imageData[offsetB + RED])/255;
+                bB = ((float)imageB.imageData[offsetB + BLUE]) / 255;
+                gB = ((float)imageB.imageData[offsetB + GREEN]) / 255;
+                rB = ((float)imageB.imageData[offsetB + RED]) / 255;
 
-                bC = 0.03*(bA * bB)*255;
-                gC = 0.03*(gA * gB)*255;
-                rC = 0.03*(rA * rB)*255;
+                bC = 0.03 * (bA * bB) * 255;
+                gC = 0.03 * (gA * gB) * 255;
+                rC = 0.03 * (rA * rB) * 255;
 
                 imageC.imageData[offsetC + BLUE] += (BYTE)(bC);
                 imageC.imageData[offsetC + GREEN] += (BYTE)(gC);
@@ -436,126 +445,3 @@ void writeImage(BMP image, char *output_image_filename)
     fclose(newFile);
 }
 //************************************************************************************************************************
-BMP blendImages(BMP &firstImage, BMP &secondImage, float blendRatio)
-{
-    /**
-     * Takes two input images and blends them together.
-     * Results are stored and returned in a BMP object
-     */
-
-    // determine which image has higher resolution
-    // take inverse of blend ratio if needed
-    BMP higher_resolution;
-    BMP lower_resolution;
-
-    if (firstImage.infoHeader.biWidth >= secondImage.infoHeader.biWidth)
-    {
-        higher_resolution = firstImage;
-        lower_resolution = secondImage;
-    }
-    else
-    {
-        higher_resolution = secondImage;
-        lower_resolution = firstImage;
-        blendRatio = 1 - blendRatio;
-    }
-
-    // create temp to hold new image data
-    BMP newImage;
-
-    // set new image to same size as high resolution image
-    newImage.fileHeader = higher_resolution.fileHeader;
-    newImage.infoHeader = higher_resolution.infoHeader;
-    newImage.imageData = (BYTE *)malloc(higher_resolution.infoHeader.biSizeImage);
-
-    // check for padding on width of pixels for high resolution image
-    int widthBytesBig = higher_resolution.infoHeader.biWidth * 3; // pixels*(Byte/pixels)
-    if (widthBytesBig % 4 != 0)
-    {
-        widthBytesBig += (4 - (widthBytesBig % 4));
-    }
-
-    // determine equivalent increment for low res image
-    float xInc = (float)lower_resolution.infoHeader.biWidth / higher_resolution.infoHeader.biWidth;
-    float yInc = (float)lower_resolution.infoHeader.biHeight / higher_resolution.infoHeader.biHeight;
-    float interpretPixel_x;
-    float interpretPixel_y;
-
-    // loop through rows and columns to change RGB values
-    int offset = 0;
-    float bBig, gBig, rBig, bSmall, gSmall, rSmall;
-
-    for (int rows = 0; rows < higher_resolution.infoHeader.biHeight; rows++)
-    {
-        for (int cols = 0; cols < higher_resolution.infoHeader.biWidth; cols++)
-        {
-            // determine offset to access current pixel for high res image
-            offset = (rows * widthBytesBig) + (cols * 3);
-
-            // get colors for high res image
-            bBig = higher_resolution.imageData[offset + BLUE];
-            gBig = higher_resolution.imageData[offset + GREEN];
-            rBig = higher_resolution.imageData[offset + RED];
-
-            // get coordinates between pixels for equivalent spot in low res image
-            interpretPixel_x = cols * xInc;
-            interpretPixel_y = rows * yInc;
-
-            // get colors for low res image
-            bSmall = interpolate_color(lower_resolution, interpretPixel_x, interpretPixel_y, BLUE);
-            gSmall = interpolate_color(lower_resolution, interpretPixel_x, interpretPixel_y, GREEN);
-            rSmall = interpolate_color(lower_resolution, interpretPixel_x, interpretPixel_y, RED);
-
-            // store result into allocated memory
-            newImage.imageData[offset + BLUE] = (BYTE)(bBig) * (blendRatio) + (bSmall) * (1 - blendRatio);
-            newImage.imageData[offset + GREEN] = (BYTE)(gBig) * (blendRatio) + (gSmall) * (1 - blendRatio);
-            newImage.imageData[offset + RED] = (BYTE)(rBig) * (blendRatio) + (rSmall) * (1 - blendRatio);
-        }
-    }
-
-    return newImage;
-}
-//************************************************************************************************************************
-float interpolate_color(BMP image, float x, float y, int color)
-{
-    // define place for result and define coordinates
-    float result;
-    int x1 = x, x2 = x + 1, y1 = y, y2 = y + 1;
-    float dx = x - x1, dy = y - y1;
-
-    // get colors from surrounding pixels
-    float leftUp = get_color(image, x, y, color);
-    float leftDown = get_color(image, x, y, color);
-    float rightUp = get_color(image, x, y, color);
-    float rightDown = get_color(image, x, y, color);
-
-    // calculate interpoated color
-    // the closer it is the stronger the weight should be
-    float left = leftUp * dy + leftDown * (1 - dy);
-    float right = rightUp * dy + rightDown * (1 - dy);
-    result = left * (1 - dx) + right * dx;
-
-    // return result
-    return result;
-}
-//************************************************************************************************************************
-float get_color(BMP image, int x, int y, int color)
-{
-    // define variable to return value of color at desired location
-    float colorValue;
-
-    // check for padding on width of pixels for low resolution image
-    int widthBytes = image.infoHeader.biWidth * 3; // pixels*(Byte/pixels)
-    if (widthBytes % 4 != 0)
-    {
-        widthBytes += (4 - (widthBytes % 4));
-    }
-
-    int offset = y * widthBytes + x * 3 + color;
-
-    // get color at desired location
-    colorValue = image.imageData[offset];
-
-    // return result
-    return colorValue;
-}
