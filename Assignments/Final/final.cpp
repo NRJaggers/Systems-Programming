@@ -304,7 +304,7 @@ void quadratic_matrix_multiplication_parallel_images(int id, int count, BMP imag
     }
 
     int offsetA = 0, offsetB = 0, offsetC = 0;
-    float rA, gA, bA, rB, gB, bB; 
+    float rA, gA, bA, rB, gB, bB, rC, gC, bC;; 
 
     // nullify the result matrix first
     for (int a = 0; a < imageC.infoHeader.biWidth; a++) //controls cols
@@ -335,9 +335,13 @@ void quadratic_matrix_multiplication_parallel_images(int id, int count, BMP imag
                 gB = ((float)imageB.imageData[offsetB + GREEN])/255;
                 rB = ((float)imageB.imageData[offsetB + RED])/255;
 
-                imageC.imageData[offsetC + BLUE] += (BYTE)(0.03*(bA * bB));
-                imageC.imageData[offsetC + GREEN] += (BYTE)(0.03*(gA * gB));
-                imageC.imageData[offsetC + RED] += (BYTE)(0.03*(rA * rB));
+                bC = 0.03*(bA * bB)*255;
+                gC = 0.03*(gA * gB)*255;
+                rC = 0.03*(rA * rB)*255;
+
+                imageC.imageData[offsetC + BLUE] += (BYTE)(bC);
+                imageC.imageData[offsetC + GREEN] += (BYTE)(gC);
+                imageC.imageData[offsetC + RED] += (BYTE)(rC);
             }
 }
 //************************************************************************************************************************
